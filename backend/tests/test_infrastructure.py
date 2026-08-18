@@ -8,6 +8,7 @@ from flask import Flask
 
 from app import create_app
 from app.http import error_response, register_error_handlers
+from app.services import market_screen_capture_service
 from app.startup import CollectorSpec, _resume_collector
 
 
@@ -57,6 +58,22 @@ def test_disabled_collector_is_not_imported(monkeypatch) -> None:
 
     assert logger.info_messages
     assert not logger.exception_messages
+
+
+def test_market_screen_capture_degrades_without_windows_bindings(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(market_screen_capture_service, "win32api", None)
+    monkeypatch.setattr(market_screen_capture_service, "win32gui", None)
+    service = market_screen_capture_service.MarketScreenCaptureService(root_dir=str(tmp_path))
+
+    target = service._find_window_bbox("W 32: Basica")
+
+    assert target == {
+        "ok": False,
+        "error": "windows_capture_unavailable",
+        "title_query": "W 32: Basica",
+    }
+    assert service._monitor_rect(1) is None
+    assert service.status()["windows_capture_available"] is False
 
 
 def test_health_contract_preserves_request_id() -> None:

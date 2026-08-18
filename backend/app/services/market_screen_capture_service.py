@@ -15,9 +15,14 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-import win32api  # type: ignore
-import win32gui  # type: ignore
 from PIL import Image, ImageOps
+
+try:
+    import win32api  # type: ignore
+    import win32gui  # type: ignore
+except ImportError:  # Windows-only integration; the read APIs remain portable.
+    win32api = None
+    win32gui = None
 
 from ..config import DEFAULT_MACRO_BLOOMBERG_REFERENCE_ASSETS, Config
 from ..utils.atomic_io import atomic_json_dump
@@ -295,6 +300,13 @@ class MarketScreenCaptureService:
         return bool(normalized_query and normalized_query in normalized_title)
 
     def _find_window_bbox(self, title_query: str) -> dict[str, Any]:
+        if win32gui is None:
+            return {
+                "ok": False,
+                "error": "windows_capture_unavailable",
+                "title_query": title_query,
+            }
+
         matches: list[dict[str, Any]] = []
 
         def callback(hwnd: int, _extra: Any) -> bool:
@@ -340,6 +352,9 @@ class MarketScreenCaptureService:
         }
 
     def _cached_window_target(self, title_query: str) -> dict[str, Any] | None:
+        if win32gui is None:
+            return None
+
         with self._lock:
             cached = dict(self._target_cache or {})
 
@@ -387,6 +402,9 @@ class MarketScreenCaptureService:
 
     @staticmethod
     def _monitor_rect(index: int) -> tuple[int, int, int, int] | None:
+        if win32api is None:
+            return None
+
         monitors = list(win32api.EnumDisplayMonitors())
         if index < 1 or index > len(monitors):
             return None
@@ -1387,6 +1405,7 @@ class MarketScreenCaptureService:
     def status(self) -> dict[str, Any]:
         latest = self.read_latest_capture() or {}
         return {
+            "windows_capture_available": win32api is not None and win32gui is not None,
             "root_dir": self.root_dir,
             "latest_capture_id": latest.get("capture_id"),
             "latest_captured_at": latest.get("captured_at"),
