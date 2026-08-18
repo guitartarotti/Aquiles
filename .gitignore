@@ -78,6 +78,7 @@ scripts/diagnostics/artifacts/*
 # Generated market datasets and provider-derived chart exports
 static/cross_asset_transmission/
 static/curve_discovery_test/
+static/correlation_stats/
 
 # Local assistant/tooling state
 .cursor/
