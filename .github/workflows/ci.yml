@@ -1,0 +1,87 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: uv sync --frozen --group dev
+
+      - name: Install Node dependencies
+        run: |
+          npm ci
+          npm ci --prefix frontend
+
+      - name: Lint backend
+        working-directory: backend
+        run: uv run ruff check app tests run.py run_*_service.py
+
+      - name: Test backend
+        working-directory: backend
+        run: >-
+          uv run pytest
+          --cov=app
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=11.5
+
+      - name: Enforce authentication coverage
+        working-directory: backend
+        run: >-
+          uv run pytest tests/test_auth.py
+          --cov=app.auth
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=90
+
+      - name: Enforce Funds Flow critical coverage
+        working-directory: backend
+        run: >-
+          uv run pytest tests/test_funds_flow_domain.py
+          --cov=app.services.funds_flow_local_service
+          --cov=app.services.funds_flow_utils
+          --cov=app.services.funds_flow_insights
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=30
+
+      - name: Lint frontend
+        run: npm --prefix frontend run lint
+
+      - name: Test frontend
+        run: npm --prefix frontend test
+
+      - name: Build frontend
+        run: npm --prefix frontend run build
+
+      - name: Audit production dependencies
+        run: |
+          npm audit --omit=dev
+          npm audit --omit=dev --prefix frontend

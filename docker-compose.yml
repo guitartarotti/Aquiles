@@ -1,0 +1,49 @@
+services:
+  neo4j:
+    image: neo4j:5-community
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?Set NEO4J_PASSWORD in .env}
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      target: backend
+    env_file: .env
+    environment:
+      AQUILES_START_BACKGROUND_SERVICES: "False"
+      GRAPH_BACKEND: graphiti_local
+      NEO4J_URI: bolt://neo4j:7687
+    ports:
+      - "5001:5001"
+    volumes:
+      - aquiles-data:/app/backend/uploads
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  aquiles-data:
+  neo4j-data:
