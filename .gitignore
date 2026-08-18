@@ -1,0 +1,84 @@
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+credentials*.json
+secrets*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+ENV/
+.eggs/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+dist/
+build/
+
+# Node.js
+node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data and generated artifacts
+.codex-run/
+backend/logs/
+backend/uploads/
+backend/raw/
+data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.jsonl
+*.log
+
+# Local analysis and test output
+heatmap-*.html
+heatmap-*.png
+tmp_*.json
+tmp_*.png
+tmp_*/
+test_out.txt
+test_err.txt
+mydoc/
+mytest/
+scripts/diagnostics/artifacts/*
+!scripts/diagnostics/artifacts/.gitkeep
+
+# Generated market datasets and provider-derived chart exports
+static/cross_asset_transmission/
+static/curve_discovery_test/
+
+# Local assistant/tooling state
+.cursor/
+.claude/

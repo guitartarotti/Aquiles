@@ -1,0 +1,13 @@
+title = "Aquiles secret scanning configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Non-secret chart series identifiers"
+regexTarget = "secret"
+regexes = [
+  '''^b3_foreign_daily$''',
+  '''^vrp_rolling_20d$''',
+]
+
