@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from app.config import Config
+from app.services import options_collector_manager as options_collector_module
 from app.services.cvm_cda_manager import CvmCdaManager
 from app.services.funds_flow_local_manager import FundsFlowLocalManager
 from app.services.macro_options_heatmap_context_schedule import options_poll_interval_seconds
@@ -55,6 +56,50 @@ def test_participant_manager_reports_runtime_without_starting_thread(monkeypatch
         "running": False,
         "sample_count": 2,
     }
+
+
+def test_options_collector_construction_and_status_are_inert(monkeypatch) -> None:
+    class FakeStore:
+        @staticmethod
+        def read_state():
+            return {"collector": {"desired_running": True}}
+
+    supervisor_starts: list[bool] = []
+
+    monkeypatch.setattr(options_collector_module, "OptionsStore", FakeStore)
+    monkeypatch.setattr(
+        options_collector_module,
+        "OptionsSnapshotService",
+        lambda **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        options_collector_module,
+        "OptionsHistoryService",
+        lambda **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        options_collector_module,
+        "B3OIService",
+        lambda **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        options_collector_module,
+        "OptionsModelingService",
+        lambda **_kwargs: object(),
+    )
+    monkeypatch.setattr(
+        options_collector_module.OptionsCollectorManager,
+        "_ensure_supervisor_running",
+        lambda _self: supervisor_starts.append(True),
+    )
+
+    manager = options_collector_module.OptionsCollectorManager()
+    status = manager.status()
+
+    assert supervisor_starts == []
+    assert status["desired_running"] is True
+    assert status["running"] is False
+    assert status["supervisor_running"] is False
 
 
 def test_startup_loads_funds_flow_manager_from_lifecycle_module() -> None:

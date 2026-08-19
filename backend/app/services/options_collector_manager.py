@@ -15,7 +15,7 @@ from .options_modeling import OptionsModelingService
 from .options_snapshot_service import OptionsSnapshotService
 from .options_store import OptionsStore
 
-logger = get_logger("mirofish.options_collector")
+logger = get_logger("aquiles.options_collector")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 
@@ -86,8 +86,6 @@ class OptionsCollectorManager:
         self._supervisor_thread: Optional[threading.Thread] = None
         self._supervisor_stop_event = threading.Event()
         self._manual_stop_requested = False
-        if not _collector_disabled_in_process():
-            self._ensure_supervisor_running()
 
     @classmethod
     def get_instance(cls) -> "OptionsCollectorManager":
@@ -534,8 +532,6 @@ class OptionsCollectorManager:
             return self.status()
 
     def status(self) -> dict[str, Any]:
-        if not _collector_disabled_in_process():
-            self._ensure_supervisor_running()
         state = self.store.read_state()
         collector = state.get("collector", {}) or {}
         delegated = _collector_disabled_in_process()
