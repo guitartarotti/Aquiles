@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+DEFAULT_FOREIGN_BROKER_REGISTRY = [
+    {
+        "registry_key": "morgan_stanley",
+        "canonical_name": "Morgan Stanley",
+        "country": "US",
+        "region": "global",
+        "aliases": ["MORGAN STANLEY CTVM S/A", "MORGAN STANLEY"],
+    },
+    {
+        "registry_key": "jp_morgan",
+        "canonical_name": "J.P. Morgan",
+        "country": "US",
+        "region": "global",
+        "aliases": ["J.P. MORGAN CCVM S/A", "JP MORGAN", "J.P. MORGAN"],
+    },
+    {
+        "registry_key": "goldman_sachs",
+        "canonical_name": "Goldman Sachs",
+        "country": "US",
+        "region": "global",
+        "aliases": ["GOLDMAN SACHS DO BRASIL CTVM SA", "GOLDMAN SACHS"],
+    },
+    {
+        "registry_key": "ubs",
+        "canonical_name": "UBS",
+        "country": "CH",
+        "region": "global",
+        "aliases": ["UBS BRASIL CCTVM S/A", "UBS"],
+    },
+    {
+        "registry_key": "abn_amro",
+        "canonical_name": "ABN AMRO",
+        "country": "NL",
+        "region": "global",
+        "aliases": ["ABN AMRO CORRETORA DE TITULOS E VALORES MOBILIARIOS LTDA", "ABN AMRO"],
+    },
+    {
+        "registry_key": "tullett_prebon",
+        "canonical_name": "Tullett Prebon",
+        "country": "UK",
+        "region": "global",
+        "aliases": ["TULLETT PREBON BRASIL CVC LTDA.", "TULLETT PREBON"],
+    },
+    {
+        "registry_key": "santander",
+        "canonical_name": "Santander",
+        "country": "ES",
+        "region": "global",
+        "aliases": ["SANTANDER CCVM S/A", "SANTANDER"],
+    },
+    {
+        "registry_key": "mirae_asset",
+        "canonical_name": "Mirae Asset",
+        "country": "KR",
+        "region": "global",
+        "aliases": ["MIRAE ASSET WEALTH MANAGEMENT (BRASIL) CCTVM LTDA.", "MIRAE ASSET"],
+    },
+    {
+        "registry_key": "hsbc",
+        "canonical_name": "HSBC",
+        "country": "UK",
+        "region": "global",
+        "aliases": ["HSBC", "HSBC CTVM"],
+    },
+    {
+        "registry_key": "barclays",
+        "canonical_name": "Barclays",
+        "country": "UK",
+        "region": "global",
+        "aliases": ["BARCLAYS", "BARCLAYS BRASIL"],
+    },
+    {
+        "registry_key": "bnp_paribas",
+        "canonical_name": "BNP Paribas",
+        "country": "FR",
+        "region": "global",
+        "aliases": ["BNP PARIBAS", "BNP PARIBAS BRASIL"],
+    },
+    {
+        "registry_key": "deutsche_bank",
+        "canonical_name": "Deutsche Bank",
+        "country": "DE",
+        "region": "global",
+        "aliases": ["DEUTSCHE", "DEUTSCHE BANK"],
+    },
+    {
+        "registry_key": "citigroup",
+        "canonical_name": "Citigroup",
+        "country": "US",
+        "region": "global",
+        "aliases": ["CITIGROUP", "CITI", "CITIBANK"],
+    },
+]
+
+DEFAULT_RETAIL_BROKER_REGISTRY = [
+    {
+        "registry_key": "genial",
+        "canonical_name": "Genial",
+        "country": "BR",
+        "region": "local",
+        "aliases": ["GENIAL", "GENIAL INVESTIMENTOS", "GENIAL CTVM"],
+    },
+    {
+        "registry_key": "toro",
+        "canonical_name": "Toro",
+        "country": "BR",
+        "region": "local",
+        "aliases": ["TORO", "TORO INVESTIMENTOS", "TORO CTVM"],
+    },
+    {
+        "registry_key": "c6",
+        "canonical_name": "C6",
+        "country": "BR",
+        "region": "local",
+        "aliases": ["C6", "C6 BANK", "C6 CTVM", "C6 INVEST"],
+    },
+    {
+        "registry_key": "renascenca",
+        "canonical_name": "Renascenca",
+        "country": "BR",
+        "region": "local",
+        "aliases": ["RENASCENCA", "RENASCENSA", "RENASCENCA DTVM", "RENASCENCA CORRETORA"],
+    },
+    {
+        "registry_key": "inter",
+        "canonical_name": "Inter",
+        "country": "BR",
+        "region": "local",
+        "aliases": ["INTER", "BANCO INTER", "INTER DTVM", "INTER CTVM"],
+    },
+    {
+        "registry_key": "elliot_warren",
+        "canonical_name": "Elliot Warren",
+        "country": "BR",
+        "region": "local",
+        "aliases": [
+            "ELLIOT WARREN",
+            "ELLIOTT WARREN",
+            "ELLIOT WARREN CTVM",
+            "ELLIOTT WARREN CTVM",
+            "ELLIOT WARREN CORRETORA",
+            "ELLIOTT WARREN CORRETORA",
+        ],
+    },
+]
+
