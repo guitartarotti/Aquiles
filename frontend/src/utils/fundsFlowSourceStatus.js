@@ -1,3 +1,6 @@
+/** @typedef {Record<string, unknown> | null | undefined} SourceStatus */
+
+/** @param {SourceStatus} source */
 export function hasPublicationGap(source) {
   const message = String(source?.latest_error || source?.error || '').toLowerCase()
   return [
@@ -7,6 +10,7 @@ export function hasPublicationGap(source) {
   ].some(fragment => message.includes(fragment))
 }
 
+/** @param {SourceStatus} source */
 export function getSourceStatusClass(source) {
   if (source?.ok || source?.status === 'active') return 'active'
   if (hasPublicationGap(source)) return 'warning'
@@ -15,6 +19,7 @@ export function getSourceStatusClass(source) {
   return 'inactive'
 }
 
+/** @param {SourceStatus} source */
 export function getSourceStatusLabel(source) {
   const labels = {
     active: 'ativo',
@@ -26,7 +31,9 @@ export function getSourceStatusLabel(source) {
   return labels[getSourceStatusClass(source)]
 }
 
+/** @param {unknown} value */
 export function formatSourceCadence(value) {
+  /** @type {Record<string, string>} */
   const labels = {
     daily_monthly_file: 'diario, arquivo mensal',
     daily_file: 'diario',
@@ -38,5 +45,6 @@ export function formatSourceCadence(value) {
     weekly: 'semanal',
     weekly_tuesday_position_friday_release: 'semanal, posicao terca / release sexta',
   }
-  return labels[value] || value || '-'
+  const key = String(value || '')
+  return labels[key] || key || '-'
 }
