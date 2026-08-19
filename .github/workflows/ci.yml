@@ -43,6 +43,10 @@ jobs:
         working-directory: backend
         run: uv run ruff check app tests run.py run_*_service.py
 
+      - name: Type-check backend contracts
+        working-directory: backend
+        run: uv run mypy
+
       - name: Test backend
         working-directory: backend
         run: >-
@@ -75,8 +79,19 @@ jobs:
       - name: Lint frontend
         run: npm --prefix frontend run lint
 
+      - name: Type-check frontend contracts
+        run: npm --prefix frontend run typecheck
+
       - name: Test frontend
         run: npm --prefix frontend test
+
+      - name: Install Playwright browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Test frontend E2E
+        working-directory: frontend
+        run: npm run test:e2e
 
       - name: Build frontend
         run: npm --prefix frontend run build

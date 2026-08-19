@@ -47,6 +47,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "pipreqs>=0.5.0",
     "ruff>=0.12.0",
+    "mypy>=1.19.1",
 ]
 
 [build-system]
@@ -59,6 +60,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0.0",
     "ruff>=0.12.0",
+    "mypy>=1.19.1",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -83,3 +85,15 @@ ignore = ["E501"]
 "app/api/macro.py" = ["E402"]
 "app/services/options_fair_value_modeling/factor_preparation.py" = ["E402"]
 "run_*_service.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+follow_imports = "silent"
+ignore_missing_imports = true
+warn_unused_configs = true
+files = [
+    "app/services/fair_value_legs_math.py",
+    "app/services/fair_value_markov_math.py",
+    "app/services/macro_participant_math.py",
+]

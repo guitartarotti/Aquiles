@@ -26,5 +26,22 @@ export default [
       'vue/no-v-html': 'off',
     },
   },
+  {
+    files: [
+      'src/auth/**/*.js',
+      'src/utils/**/*.js',
+      'tests/**/*.js',
+      'e2e/**/*.js',
+      'vite.config.js',
+      'vitest.config.js',
+      'playwright.config.js',
+    ],
+    rules: {
+      eqeqeq: ['error', 'smart'],
+      'no-implicit-coercion': 'error',
+      'no-promise-executor-return': 'error',
+      'no-unreachable-loop': 'error',
+    },
+  },
   prettier,
 ]
