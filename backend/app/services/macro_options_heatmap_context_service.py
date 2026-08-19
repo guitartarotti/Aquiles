@@ -19,7 +19,7 @@ from .options_modeling import OptionsModelingService
 from .options_snapshot_service import OptionsSnapshotService
 from .options_store import OptionsStore
 
-logger = get_logger("mirofish.macro_options_heatmap_context")
+logger = get_logger("aquiles.macro_options_heatmap_context")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 

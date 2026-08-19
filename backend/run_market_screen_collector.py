@@ -27,7 +27,7 @@ from app.services.market_screen_capture_service import MarketScreenCaptureCollec
 from app.utils.logger import get_logger
 
 
-logger = get_logger("mirofish.market_screen_worker")
+logger = get_logger("aquiles.market_screen_worker")
 
 
 def main() -> None:

@@ -11,7 +11,7 @@ from ..utils.logger import get_logger
 from .macro_options_heatmap_context_schedule import options_poll_interval_seconds
 from .macro_options_heatmap_context_service import MacroOptionsHeatmapContextService, _now_iso
 
-logger = get_logger("mirofish.macro_options_heatmap_context")
+logger = get_logger("aquiles.macro_options_heatmap_context")
 
 
 class MacroOptionsHeatmapContextManager:

@@ -29,7 +29,7 @@ from app.server import serve
 from app.services.options_model_read_service import OptionsModelReadService, _is_truthy
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.options_model_service")
+logger = get_logger("aquiles.options_model_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

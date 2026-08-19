@@ -21,7 +21,7 @@ from ..config import Config
 from ..utils.atomic_io import atomic_json_dump
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.report_source_discovery")
+logger = get_logger("aquiles.report_source_discovery")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 

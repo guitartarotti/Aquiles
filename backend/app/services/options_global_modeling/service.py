@@ -22,7 +22,7 @@ from .outputs import build_global_output
 from .regime_classifier import classify_global_regime
 from .structural_score import build_structural_scores
 
-logger = get_logger("mirofish.options_global.service")
+logger = get_logger("aquiles.options_global.service")
 
 
 class OptionsGlobalTriangulationService:

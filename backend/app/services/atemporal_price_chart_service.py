@@ -10,7 +10,7 @@ import pandas as pd
 from ..utils.logger import get_logger
 from .market_screen_chart_service import MarketScreenChartService
 
-logger = get_logger("mirofish.atemporal_price_chart")
+logger = get_logger("aquiles.atemporal_price_chart")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 DEFAULT_SYMBOL = "XB1"
 XB1_CACHE_SYMBOL = "XB1"

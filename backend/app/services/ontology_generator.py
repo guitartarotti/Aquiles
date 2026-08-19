@@ -410,7 +410,7 @@ class OntologyGenerator:
         code_lines = [
             '"""',
             '自定义实体类型定义',
-            '由MiroFish自动生成，用于社会舆论模拟',
+            '由Aquiles自动生成，用于社会舆论模拟',
             '"""',
             '',
             'from pydantic import Field',
@@ -503,4 +503,3 @@ class OntologyGenerator:
         code_lines.append('}')
         
         return '\n'.join(code_lines)
-

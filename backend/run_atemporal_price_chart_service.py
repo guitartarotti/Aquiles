@@ -29,7 +29,7 @@ from app.server import serve
 from app.services.atemporal_price_chart_service import AtemporalPriceChartService
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.atemporal_price_chart_service")
+logger = get_logger("aquiles.atemporal_price_chart_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

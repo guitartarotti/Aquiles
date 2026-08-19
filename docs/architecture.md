@@ -44,6 +44,12 @@ As rotas principais e os widgets do Discovery usam carregamento assíncrono. Abr
 
 Persistência, grade e ordenação de camadas ficam em `frontend/src/utils/discoveryLayout.js`. Formatação monetária, estados das fontes e cálculos geométricos de curvas ficam em módulos puros dentro de `frontend/src/utils`, cobertos pelo test runner do Node. Componentes Vue coordenam estado e interação; não devem voltar a concentrar essas regras.
 
+## Tipagem gradual
+
+Os contratos puros do frontend são verificados com TypeScript em modo `checkJs` e `strict`, mantendo os arquivos JavaScript compatíveis durante a migração. O escopo inicial está em `frontend/tsconfig.typecheck.json` e deve crescer por domínio sempre que um módulo for estabilizado.
+
+No backend, módulos matemáticos e contratos isolados entram no mypy com `strict = true`. O escopo fica explícito em `backend/pyproject.toml`; adicionar um arquivo ao gate exige corrigir seus erros, não silenciá-los globalmente. Ruff e ESLint continuam responsáveis por erros estruturais complementares.
+
 ### Funds Flow
 
 `FundsFlowLocalWidget.vue` coordena abas, estado e carregamento. Os estilos ficam em

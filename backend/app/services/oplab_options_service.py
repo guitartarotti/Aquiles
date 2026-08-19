@@ -47,7 +47,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .options_greeks_model import apply_priority_greeks, compute_greeks_from_snapshot
 
-logger = get_logger("mirofish.oplab_options")
+logger = get_logger("aquiles.oplab_options")
 
 
 # ─── Rate Limiter ────────────────────────────────────────────────────────────

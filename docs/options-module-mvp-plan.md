@@ -1,6 +1,6 @@
 # Options Module MVP Plan
 
-This document defines the production-style MVP plan for adding an options module to the existing MiroFish backend without creating a parallel system.
+This document defines the production-style MVP plan for adding an options module to the existing Aquiles backend without creating a parallel system.
 
 The design reuses the patterns that already exist in the project today:
 

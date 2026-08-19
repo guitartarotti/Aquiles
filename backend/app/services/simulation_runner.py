@@ -22,7 +22,7 @@ from ..utils.logger import get_logger
 from .simulation_ipc import SimulationIPCClient
 from .zep_graph_memory_updater import ZepGraphMemoryManager
 
-logger = get_logger('mirofish.simulation_runner')
+logger = get_logger('aquiles.simulation_runner')
 
 # 标记是否已注册清理函数
 _cleanup_registered = False
@@ -1762,4 +1762,3 @@ class SimulationRunner:
             results = results[:limit]
         
         return results
-

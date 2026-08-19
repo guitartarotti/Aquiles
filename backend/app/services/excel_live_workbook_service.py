@@ -11,7 +11,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .market_screen_capture_service import MarketScreenCaptureCollectorManager
 
-logger = get_logger("mirofish.excel_live_workbook")
+logger = get_logger("aquiles.excel_live_workbook")
 
 
 def _utc_now_iso() -> str:

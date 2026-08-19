@@ -30,7 +30,7 @@ from app.http import error_response, register_error_handlers
 from app.server import serve
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.legacy_heatmap_service")
+logger = get_logger("aquiles.legacy_heatmap_service")
 
 
 def _is_truthy(value) -> bool:

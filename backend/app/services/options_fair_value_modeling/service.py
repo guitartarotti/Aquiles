@@ -34,7 +34,7 @@ from .residual_ml_model import build_residual_ml_adjustment
 from .types import FairValueRunConfig
 from .us_rates_factor_model import build_us_rates_factor_context
 
-logger = get_logger("mirofish.options_fair_value.service")
+logger = get_logger("aquiles.options_fair_value.service")
 
 
 def _finite_float(value: Any, default: float = 0.0) -> float:

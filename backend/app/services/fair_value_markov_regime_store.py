@@ -13,7 +13,7 @@ from typing import Any
 from ..config import Config
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.fair_value_markov_regime_store")
+logger = get_logger("aquiles.fair_value_markov_regime_store")
 
 
 def _utc_now_iso() -> str:

@@ -37,7 +37,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-logger = logging.getLogger("mirofish.options_data_provider")
+logger = logging.getLogger("aquiles.options_data_provider")
 
 
 def get_options_data_provider(config: Any = None) -> Any:

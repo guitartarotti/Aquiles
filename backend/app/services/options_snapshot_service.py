@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     pass
 
 
-logger = get_logger("mirofish.options_snapshot")
+logger = get_logger("aquiles.options_snapshot")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 

@@ -13,7 +13,7 @@ from typing import Any, Iterable
 from ..config import Config
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.market_screen_history_store")
+logger = get_logger("aquiles.market_screen_history_store")
 
 
 def _utc_now_iso() -> str:

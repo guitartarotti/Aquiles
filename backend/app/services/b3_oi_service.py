@@ -24,7 +24,7 @@ from ..utils.logger import get_logger
 from .b3_open_interest_scraper import B3OpenInterestScraper
 from .options_store import OptionsStore
 
-logger = get_logger("mirofish.b3_oi_service")
+logger = get_logger("aquiles.b3_oi_service")
 
 _CHECKPOINT_PREFIX = "b3_oi_complete"
 

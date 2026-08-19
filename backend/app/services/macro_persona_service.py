@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence
 from ..utils.logger import get_logger
 from .zep_entity_reader import EntityNode, FilteredEntities, ZepEntityReader
 
-logger = get_logger("mirofish.macro_personas")
+logger = get_logger("aquiles.macro_personas")
 
 
 MACRO_PERSONA_ENTITY_TYPES = {

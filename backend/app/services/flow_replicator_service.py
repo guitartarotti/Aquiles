@@ -12,7 +12,7 @@ from typing import Any
 from ..utils.logger import get_logger
 from .flow_replicator_store import FlowReplicatorStore
 
-logger = get_logger("mirofish.flow_replicator")
+logger = get_logger("aquiles.flow_replicator")
 
 MONTH_CODES = {
     1: "F",

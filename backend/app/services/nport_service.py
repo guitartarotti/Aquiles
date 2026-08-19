@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup
 from ..config import Config
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.nport")
+logger = get_logger("aquiles.nport")
 
 NPORT_SCHEMA_VERSION = 1
 SEC_NPORT_CATALOG_URL = "https://catalog.data.gov/dataset/form-n-port-data-sets"
@@ -2034,7 +2034,7 @@ class NportService:
         }
 
     def discover_remote_quarters(self) -> dict[str, Any]:
-        headers = {"User-Agent": getattr(Config, "NPORT_SEC_USER_AGENT", "MiroFish NPORT research contato@example.com")}
+        headers = {"User-Agent": getattr(Config, "NPORT_SEC_USER_AGENT", "Aquiles NPORT research contato@example.com")}
         response = requests.get(SEC_NPORT_CATALOG_URL, headers=headers, timeout=30)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
@@ -2074,7 +2074,7 @@ class NportService:
         target_dir.mkdir(parents=True, exist_ok=True)
         if not zip_path.exists() or force:
             url = SEC_NPORT_DOWNLOAD_URL.format(quarter=quarter)
-            headers = {"User-Agent": getattr(Config, "NPORT_SEC_USER_AGENT", "MiroFish NPORT research contato@example.com")}
+            headers = {"User-Agent": getattr(Config, "NPORT_SEC_USER_AGENT", "Aquiles NPORT research contato@example.com")}
             with requests.get(url, headers=headers, stream=True, timeout=120) as response:
                 response.raise_for_status()
                 tmp_path = zip_path.with_suffix(".zip.tmp")

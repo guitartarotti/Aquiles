@@ -10,7 +10,7 @@ from ..utils.logger import get_logger
 from .macro_live_service import MacroIngestionService, MacroStateStore
 from .macro_persona_service import MacroPersonaService
 
-logger = get_logger("mirofish.macro_trends")
+logger = get_logger("aquiles.macro_trends")
 
 
 class MacroTrendService:

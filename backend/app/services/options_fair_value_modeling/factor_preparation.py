@@ -24,7 +24,7 @@ from ...utils.logger import get_logger
 from .factor_definitions import DEFAULT_FACTOR_DEFINITIONS
 from .types import FairValueFactorDefinition, FairValueRunConfig
 
-logger = get_logger("mirofish.options_fair_value.factor_preparation")
+logger = get_logger("aquiles.options_fair_value.factor_preparation")
 
 SESSION_TIMEZONE = ZoneInfo("America/Sao_Paulo")
 

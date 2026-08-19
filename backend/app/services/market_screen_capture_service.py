@@ -29,7 +29,7 @@ from ..utils.atomic_io import atomic_json_dump
 from ..utils.logger import get_logger
 from .market_screen_history_store import MarketScreenHistoryStore
 
-logger = get_logger("mirofish.market_screen_capture")
+logger = get_logger("aquiles.market_screen_capture")
 
 
 def _capture_disabled_in_process() -> bool:

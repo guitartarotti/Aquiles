@@ -14,7 +14,7 @@ from ..config import Config
 from ..utils.atomic_io import atomic_json_dump, atomic_text_write
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.options_store")
+logger = get_logger("aquiles.options_store")
 
 
 def _utc_now() -> datetime:

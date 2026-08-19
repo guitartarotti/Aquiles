@@ -18,7 +18,7 @@ from .macro_live_service import MacroStateStore
 from .macro_market_overview_service import MacroMarketOverviewService
 from .macro_persona_service import MACRO_PERSONA_CATALOG
 
-logger = get_logger("mirofish.macro_thermometer")
+logger = get_logger("aquiles.macro_thermometer")
 
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 THERMOMETER_BUCKETS = ("general", "credit", "equity", "fx")

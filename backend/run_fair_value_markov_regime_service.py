@@ -29,7 +29,7 @@ from app.server import serve
 from app.services.fair_value_markov_regime_service import FairValueMarkovRegimeService
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.fair_value_markov_regime_service")
+logger = get_logger("aquiles.fair_value_markov_regime_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

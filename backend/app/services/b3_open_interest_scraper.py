@@ -34,7 +34,7 @@ from typing import Any
 
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.b3_oi_scraper")
+logger = get_logger("aquiles.b3_oi_scraper")
 
 # URL base da pagina B3 de posicoes em aberto de opcoes de indices
 _B3_OI_URL = (

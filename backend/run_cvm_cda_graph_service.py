@@ -31,7 +31,7 @@ from app.server import serve
 from app.services.cvm_cda_graph_service import CvmCdaGraphService
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.cvm_cda_graph_service")
+logger = get_logger("aquiles.cvm_cda_graph_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

@@ -37,7 +37,7 @@ from app.services.options_store import OptionsStore
 from app.services.vol_index import VolIndexService
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.vol_analytics_service")
+logger = get_logger("aquiles.vol_analytics_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

@@ -21,7 +21,7 @@ from ..config import Config
 from ..utils.atomic_io import atomic_json_dump
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.cvm_cda")
+logger = get_logger("aquiles.cvm_cda")
 
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 CVM_CDA_SCHEMA_VERSION = 2
@@ -2231,7 +2231,7 @@ class CvmCdaService:
                 CVM_CKAN_PACKAGE_URL,
                 params={"id": CVM_CDA_PACKAGE},
                 timeout=30,
-                headers={"User-Agent": "MiroFish Funds Flow Local CDA research"},
+                headers={"User-Agent": "Aquiles Funds Flow Local CDA research"},
             )
             response.raise_for_status()
             package = response.json().get("result") or {}
@@ -2266,7 +2266,7 @@ class CvmCdaService:
             resource.url,
             timeout=180,
             stream=True,
-            headers={"User-Agent": "MiroFish Funds Flow Local CDA research"},
+            headers={"User-Agent": "Aquiles Funds Flow Local CDA research"},
         )
         response.raise_for_status()
         tmp_path = zip_path.with_suffix(".zip.tmp")

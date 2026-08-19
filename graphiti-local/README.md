@@ -5,10 +5,10 @@ This folder holds an isolated Python environment for Graphiti local experiments.
 Why a separate environment:
 
 - `graphiti-core` currently requires `neo4j>=5.26.0`
-- the main MiroFish backend depends on `camel-oasis==0.2.5`
+- the main Aquiles backend depends on `camel-oasis==0.2.5`
 - `camel-oasis` pins `neo4j==5.23.0`
 
-Keeping Graphiti isolated avoids breaking the current MiroFish backend while we migrate the graph layer.
+Keeping Graphiti isolated avoids breaking the current Aquiles backend while we migrate the graph layer.
 
 ## Setup
 

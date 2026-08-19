@@ -10,7 +10,7 @@ from typing import Any, Callable, Optional, Tuple, Type
 
 from ..utils.logger import get_logger
 
-logger = get_logger('mirofish.retry')
+logger = get_logger('aquiles.retry')
 
 
 def retry_with_backoff(
@@ -236,4 +236,3 @@ class RetryableAPIClient:
                     raise
         
         return results, failures
-

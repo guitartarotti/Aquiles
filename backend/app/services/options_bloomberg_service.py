@@ -7,7 +7,7 @@ from ..utils.logger import get_logger
 from .bloomberg_desktop_service import BloombergDesktopService
 from .excel_bloomberg_service import ExcelBloombergService
 
-logger = get_logger("mirofish.options_bloomberg")
+logger = get_logger("aquiles.options_bloomberg")
 _excel_bloomberg = ExcelBloombergService()
 
 

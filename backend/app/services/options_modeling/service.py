@@ -22,7 +22,7 @@ from .spot_grid import reprice_grid
 from .strike_profiles import build_strike_profiles
 from .types import ModelRunConfig
 
-logger = get_logger("mirofish.options_modeling.service")
+logger = get_logger("aquiles.options_modeling.service")
 
 
 class OptionsModelingService:
