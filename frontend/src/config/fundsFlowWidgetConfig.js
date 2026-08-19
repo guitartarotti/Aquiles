@@ -52,4 +52,3 @@ export const moneyFlowModes = [
   { key: 'quarterly', label: 'Trimestral', detail: 'CDA + N-PORT' },
   { key: 'daily_weekly', label: 'Semanal/diario', detail: 'ICI + B3 + CVM + ANBIMA' },
 ]
-

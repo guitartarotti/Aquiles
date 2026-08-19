@@ -124,4 +124,3 @@ def _delta_from_history(values: list[float], index: int, steps: int) -> float:
     resolved_steps = max(int(steps or 1), 1)
     previous_index = max(index - resolved_steps, 0)
     return float(values[index] - values[previous_index])
-

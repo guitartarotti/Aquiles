@@ -47,4 +47,3 @@ def _normalize_broker_name(value: Any) -> str:
     for source, target in replacements.items():
         text = text.replace(source, target)
     return " ".join(text.split())
-

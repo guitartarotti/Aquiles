@@ -145,4 +145,3 @@ DEFAULT_RETAIL_BROKER_REGISTRY = [
         ],
     },
 ]
-

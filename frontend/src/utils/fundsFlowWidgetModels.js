@@ -225,4 +225,3 @@ export function stressLabel(value) {
   if (value === 'medium') return 'medio'
   return 'baixo'
 }
-

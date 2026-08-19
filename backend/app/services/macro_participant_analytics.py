@@ -929,7 +929,6 @@ class MacroParticipantAnalyticsMixin:
             "primary": primary_payload,
             "windows": windows_payload,
         }
-
     def _build_level_defense_model(self, cohort_value_map: dict[str, Any]) -> dict[str, Any]:
         latest_price = _safe_float(cohort_value_map.get("latest_price"))
         raw_bin_size = _safe_float(cohort_value_map.get("bin_size"))
@@ -3677,4 +3676,3 @@ class MacroParticipantAnalyticsMixin:
             "primary": primary_payload,
             "windows": windows_payload,
         }
-
