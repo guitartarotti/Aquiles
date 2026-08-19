@@ -256,4 +256,3 @@ EXTRA_FEATURE_DEFINITIONS: list[dict[str, str]] = [
     {"key": "corr_state_local_dominance", "label": "Corr local prob"},
     {"key": "corr_state_corr_break", "label": "Corr break prob"},
 ]
-

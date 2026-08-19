@@ -550,4 +550,3 @@ SOURCE_INVENTORY: tuple[SourceInventoryItem, ...] = (
         status="configured",
     ),
 )
-
