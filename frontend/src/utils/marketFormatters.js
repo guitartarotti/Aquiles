@@ -1,8 +1,10 @@
+/** @param {unknown} value */
 export function toNumber(value) {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric : null
 }
 
+/** @param {unknown} value */
 export function formatPrice(value) {
   const numeric = toNumber(value)
   if (numeric == null) return '--'
@@ -13,6 +15,7 @@ export function formatPrice(value) {
   })
 }
 
+/** @param {unknown} value @param {boolean} [signed] */
 export function formatSignedQuantity(value, signed = true) {
   const numeric = toNumber(value)
   if (numeric == null) return '--'
@@ -23,6 +26,7 @@ export function formatSignedQuantity(value, signed = true) {
   })
 }
 
+/** @param {unknown} value */
 export function formatSignedPoints(value) {
   const numeric = toNumber(value)
   if (numeric == null) return '--'
@@ -34,6 +38,7 @@ export function formatSignedPoints(value) {
   })
 }
 
+/** @param {unknown} value */
 export function formatSignedBps(value) {
   const numeric = toNumber(value)
   if (numeric == null) return '--'
@@ -44,6 +49,7 @@ export function formatSignedBps(value) {
   })} bps`
 }
 
+/** @param {unknown} value */
 export function formatPressureScore(value) {
   const numeric = toNumber(value)
   if (numeric == null) return '--'
@@ -54,6 +60,7 @@ export function formatPressureScore(value) {
   })
 }
 
+/** @param {unknown} value */
 export function formatCompactFloat(value) {
   const numeric = toNumber(value)
   if (numeric == null) return '--'
@@ -63,6 +70,7 @@ export function formatCompactFloat(value) {
   })
 }
 
+/** @param {unknown} value @param {number} [digits] */
 export function formatSignedFloat(value, digits = 1) {
   const numeric = toNumber(value)
   if (numeric == null) return '--'

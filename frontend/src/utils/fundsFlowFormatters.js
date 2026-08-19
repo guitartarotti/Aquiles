@@ -1,3 +1,4 @@
+/** @param {unknown} value */
 export function formatMoney(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return '-'
@@ -8,11 +9,13 @@ export function formatMoney(value) {
   return `${sign}R$ ${absolute.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
 }
 
+/** @param {unknown} value */
 export function formatBrlMillion(value) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? formatMoney(parsed * 1_000_000) : '-'
 }
 
+/** @param {unknown} value */
 export function formatUsdMillions(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return '-'
@@ -23,6 +26,7 @@ export function formatUsdMillions(value) {
   return `${sign}US$ ${absolute.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} mi`
 }
 
+/** @param {unknown} value */
 export function formatUsd(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return '-'
@@ -34,21 +38,25 @@ export function formatUsd(value) {
   return `${sign}US$ ${absolute.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
 }
 
+/** @param {unknown} value */
 export function formatRatio(value) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? `${(parsed * 100).toFixed(2)}%` : '-'
 }
 
+/** @param {unknown} value */
 export function formatPercent(value) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? `${parsed.toFixed(2)}%` : '-'
 }
 
+/** @param {unknown} value @param {number} [digits] */
 export function formatNumber(value, digits = 2) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed.toFixed(digits) : '-'
 }
 
+/** @param {unknown} value */
 export function formatCount(value) {
   const parsed = Number(value)
   return Number.isFinite(parsed)
@@ -56,6 +64,7 @@ export function formatCount(value) {
     : '-'
 }
 
+/** @param {unknown} value */
 export function formatDays(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return '-'
@@ -63,12 +72,14 @@ export function formatDays(value) {
   return `${parsed.toFixed(parsed < 10 ? 1 : 0)}d`
 }
 
+/** @param {unknown} value */
 export function formatLatency(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return '-'
   return parsed >= 1000 ? `${(parsed / 1000).toFixed(1)}s` : `${parsed.toFixed(0)}ms`
 }
 
+/** @param {unknown} value */
 export function formatBytes(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return '-'
@@ -78,6 +89,7 @@ export function formatBytes(value) {
   return `${parsed.toFixed(0)} B`
 }
 
+/** @param {unknown} value @param {unknown} base */
 export function ratioPercent(value, base) {
   const numerator = Number(value)
   const denominator = Number(base)
@@ -85,6 +97,7 @@ export function ratioPercent(value, base) {
   return numerator / denominator * 100
 }
 
+/** @param {unknown} value */
 export function formatSignedCount(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return '-'
@@ -92,18 +105,21 @@ export function formatSignedCount(value) {
   return `${sign}${Math.abs(parsed).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`
 }
 
+/** @param {unknown} value */
 export function movementClass(value) {
   const parsed = Number(value)
   if (!Number.isFinite(parsed) || Math.abs(parsed) < 0.000001) return 'flat'
   return parsed > 0 ? 'up' : 'down'
 }
 
+/** @param {unknown} value */
 export function formatDate(value) {
   if (!value) return '-'
   const date = new Date(`${String(value).slice(0, 10)}T12:00:00`)
   return Number.isNaN(date.getTime()) ? '-' : date.toLocaleDateString('pt-BR')
 }
 
+/** @param {unknown} value */
 export function formatDateTime(value) {
   if (!value) return '-'
   const date = new Date(String(value))
@@ -117,12 +133,14 @@ export function formatDateTime(value) {
   })
 }
 
+/** @param {unknown} value */
 export function shortDate(value) {
   if (!value) return '-'
   const text = String(value).slice(0, 10)
   return `${text.slice(8, 10)}/${text.slice(5, 7)}`
 }
 
+/** @param {unknown} value */
 export function formatPeriodDate(value) {
   const text = String(value || '')
   if (!text) return '-'
