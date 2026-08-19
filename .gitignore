@@ -40,6 +40,9 @@ build/
 # Node.js
 node_modules/
 frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -2,6 +2,10 @@ import { reactive, readonly } from 'vue'
 
 const STORAGE_KEY = 'aquiles.auth.session'
 
+/** @typedef {{ username: string, [key: string]: unknown }} AuthUser */
+/** @typedef {{ accessToken: string, user: AuthUser }} AuthSession */
+
+/** @returns {AuthSession | null} */
 function readStoredSession() {
   if (typeof window === 'undefined') return null
   try {
@@ -15,21 +19,27 @@ function readStoredSession() {
 }
 
 const storedSession = readStoredSession()
-const state = reactive({
+const state = reactive(/** @type {{ accessToken: string | null, user: AuthUser | null }} */ ({
   accessToken: storedSession?.accessToken || null,
   user: storedSession?.user || null,
-})
+}))
 
 export const authState = readonly(state)
 
+/** @returns {string | null} */
 export function getAccessToken() {
   return state.accessToken
 }
 
+/** @returns {boolean} */
 export function hasAuthSession() {
   return Boolean(state.accessToken && state.user)
 }
 
+/**
+ * @param {string} accessToken
+ * @param {AuthUser} user
+ */
 export function setAuthSession(accessToken, user) {
   const session = { accessToken, user }
   state.accessToken = accessToken
