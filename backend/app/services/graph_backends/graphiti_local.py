@@ -17,7 +17,7 @@ from ...utils.locale import t
 from ...utils.logger import get_logger
 from .base import GraphBackend, GraphInfo, ProgressCallback
 
-logger = get_logger("mirofish.graphiti_local")
+logger = get_logger("aquiles.graphiti_local")
 
 
 class GraphitiLocalBackend(GraphBackend):
@@ -76,7 +76,7 @@ class GraphitiLocalBackend(GraphBackend):
         metadata = {
             "graph_id": graph_id,
             "name": name,
-            "description": description or "MiroFish Graphiti Local Graph",
+            "description": description or "Aquiles Graphiti Local Graph",
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
             "ontology": None,
@@ -129,7 +129,7 @@ class GraphitiLocalBackend(GraphBackend):
                 "graph_name": metadata.get("name") or graph_id,
                 "chunks": batch_chunks,
                 "ontology": ontology,
-                "source_description": metadata.get("description") or "MiroFish Graphiti Local Graph",
+                "source_description": metadata.get("description") or "Aquiles Graphiti Local Graph",
             }
             result = self._run_bridge("add_text_batch", payload, timeout=900)
             batch_episode_ids = [str(item) for item in result.get("episode_ids", []) if item]

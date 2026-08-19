@@ -7,7 +7,7 @@ from ..utils.logger import get_logger
 from .macro_persona_service import MacroPersonaService
 from .zep_entity_reader import EntityNode, FilteredEntities, ZepEntityReader
 
-logger = get_logger("mirofish.simulation_entity_resolver")
+logger = get_logger("aquiles.simulation_entity_resolver")
 
 
 class SimulationEntityResolver:

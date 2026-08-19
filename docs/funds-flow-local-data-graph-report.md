@@ -1,7 +1,7 @@
 # Funds Flow Local - Relatorio de Dados e Possivel Tela de Grafo
 
 Gerado em: 2026-05-27  
-Projeto: MiroFish  
+Projeto: Aquiles
 Modulo: Funds Flow Local  
 Objetivo deste documento: entregar ao analista um inventario detalhado do que ja existe de dados no widget, como cada fonte entra no pipeline, quais campos e tabelas derivadas estao disponiveis, quais limitacoes ainda existem e como o grafo ja existente no projeto pode ser reaproveitado para uma tela especifica de grafo.
 
@@ -1575,4 +1575,3 @@ O projeto ja tem dados suficientes para pedir ao analista uma proposta de grafo 
 - semantico, para memoria e narrativa.
 
 A infraestrutura existente de grafo e reaproveitavel, principalmente o `GraphPanel.vue`. A melhor decisao tecnica e criar um endpoint proprio do Funds Flow Local que converta dados financeiros ja calculados em nodes/edges, mantendo Graphiti/Zep como camada complementar de memoria e nao como fonte oficial dos numeros.
-

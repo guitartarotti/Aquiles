@@ -14,7 +14,7 @@ from ..macro_options_heatmap_context_service import MacroOptionsHeatmapContextSe
 from ..options_store import OptionsStore
 from .factor_preparation import _model_input_direction_multiplier, load_factor_definitions
 
-logger = get_logger("mirofish.options_fair_value.intraday_dependency")
+logger = get_logger("aquiles.options_fair_value.intraday_dependency")
 
 
 def _safe_float(value: Any, default: float | None = None) -> float | None:

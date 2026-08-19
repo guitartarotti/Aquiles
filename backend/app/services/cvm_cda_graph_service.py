@@ -17,7 +17,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .cvm_cda_service import CDA_TARGET_LABELS, CDA_TARGET_SQL, CvmCdaService
 
-logger = get_logger("mirofish.cvm_cda_graph")
+logger = get_logger("aquiles.cvm_cda_graph")
 
 
 class CvmCdaGraphService:

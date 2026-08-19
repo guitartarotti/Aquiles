@@ -12,7 +12,7 @@ from xml.sax.saxutils import escape
 
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.excel_bloomberg")
+logger = get_logger("aquiles.excel_bloomberg")
 
 BRIDGE_SHEET_NAME = "AquilesBloombergBridge"
 BRIDGE_WORKBOOK_NAME = "AquilesBloombergBridge.xlsx"

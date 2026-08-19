@@ -26,11 +26,11 @@ class ZepCloudGraphBackend(GraphBackend):
         self.client = Zep(api_key=self.api_key)
 
     def create_graph(self, name: str, description: Optional[str] = None) -> str:
-        graph_id = f"mirofish_{uuid.uuid4().hex[:16]}"
+        graph_id = f"aquiles_{uuid.uuid4().hex[:16]}"
         self.client.graph.create(
             graph_id=graph_id,
             name=name,
-            description=description or "MiroFish Social Simulation Graph",
+            description=description or "Aquiles Social Simulation Graph",
         )
         return graph_id
 

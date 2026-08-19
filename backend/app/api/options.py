@@ -1127,7 +1127,7 @@ def backfill_b3_open_interest():
                 service.backfill(date_from=date_from, date_to=date_to, force=force)
             except Exception as exc:
                 import logging
-                logging.getLogger("mirofish.b3_oi_service").error("Backfill erro: %s", exc)
+                logging.getLogger("aquiles.b3_oi_service").error("Backfill erro: %s", exc)
 
         t = _th.Thread(target=_run, daemon=True, name="b3-oi-backfill")
         t.start()

@@ -21,7 +21,7 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger("mirofish.sabr_hedge_model")
+logger = logging.getLogger("aquiles.sabr_hedge_model")
 
 
 def _native_scalar(value: Any) -> Any:

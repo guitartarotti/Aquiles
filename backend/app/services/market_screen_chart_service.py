@@ -16,7 +16,7 @@ from ..config import DEFAULT_MACRO_BLOOMBERG_REFERENCE_ASSETS, Config
 from ..utils.logger import get_logger
 from .market_screen_history_store import MarketScreenHistoryStore
 
-logger = get_logger("mirofish.market_screen_chart")
+logger = get_logger("aquiles.market_screen_chart")
 
 DEFAULT_BENCHMARK_SYMBOL = "XB1"
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")

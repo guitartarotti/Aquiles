@@ -9,7 +9,7 @@ import pandas as pd
 from ...utils.logger import get_logger
 from .types import FairValueRunConfig
 
-logger = get_logger("mirofish.options_fair_value.dynamic_model")
+logger = get_logger("aquiles.options_fair_value.dynamic_model")
 
 
 def _sigmoid(value: float) -> float:

@@ -22,7 +22,7 @@ from ..utils.logger import get_logger
 from .zep_entity_reader import EntityNode
 from .zep_tools import ZepToolsService
 
-logger = get_logger('mirofish.oasis_profile')
+logger = get_logger('aquiles.oasis_profile')
 
 
 @dataclass

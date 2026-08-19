@@ -10,7 +10,7 @@ from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from .macro_live_service import MacroIngestionService, MacroStateStore
 
-logger = get_logger("mirofish.macro_overview")
+logger = get_logger("aquiles.macro_overview")
 
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 BUCKET_LABELS = {

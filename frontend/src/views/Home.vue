@@ -7,7 +7,7 @@
       </div>
       <div class="nav-links">
         <LanguageSwitcher />
-        <a href="https://github.com/666ghj/MiroFish" target="_blank" class="github-link">
+        <a href="https://github.com/guitartarotti/Aquiles" target="_blank" rel="noopener noreferrer" class="github-link">
           {{ $t('nav.visitGithub') }} <span class="arrow">-&gt;</span>
         </a>
       </div>

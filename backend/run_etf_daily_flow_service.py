@@ -31,7 +31,7 @@ from app.server import serve
 from app.services.etf_daily_flow_service import EtfDailyFlowManager, EtfDailyFlowService
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.etf_daily_flow_service")
+logger = get_logger("aquiles.etf_daily_flow_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

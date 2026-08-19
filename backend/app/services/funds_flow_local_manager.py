@@ -15,7 +15,7 @@ from ..utils.logger import get_logger
 from .funds_flow_local_service import FundsFlowLocalService
 from .funds_flow_utils import LOCAL_TZ, _clean_json, _local_now, _now_iso, _parse_iso
 
-logger = get_logger("mirofish.funds_flow_local")
+logger = get_logger("aquiles.funds_flow_local")
 
 
 class FundsFlowLocalManager:

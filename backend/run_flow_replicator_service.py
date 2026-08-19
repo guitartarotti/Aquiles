@@ -48,7 +48,7 @@ from app.services.flow_replicator_service import FlowReplicatorService
 from app.services.flow_replicator_store import FlowReplicatorStore
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.flow_replicator_service")
+logger = get_logger("aquiles.flow_replicator_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

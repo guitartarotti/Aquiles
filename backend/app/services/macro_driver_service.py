@@ -16,7 +16,7 @@ from ..utils.logger import get_logger
 from .macro_context_tokenizer import aggregate_macro_event_tokens, build_driver_llm_context_packet
 from .macro_live_service import MacroIngestionService, MacroStateStore
 
-logger = get_logger("mirofish.macro_drivers")
+logger = get_logger("aquiles.macro_drivers")
 
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 STOPWORDS = {

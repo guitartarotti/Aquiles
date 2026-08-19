@@ -16,7 +16,7 @@ from ..config import Config
 from ..utils.locale import get_locale, set_locale
 from ..utils.logger import get_logger
 
-logger = get_logger('mirofish.zep_graph_memory_updater')
+logger = get_logger('aquiles.zep_graph_memory_updater')
 
 
 @dataclass

@@ -33,7 +33,7 @@ from app.server import serve
 from app.services.options_collector_manager import OptionsCollectorManager
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.options_collector_service")
+logger = get_logger("aquiles.options_collector_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

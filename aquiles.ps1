@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Aquiles — Gerenciador de processos do projeto MiroFish/Aquiles.
+    Aquiles — Gerenciador de processos da plataforma Aquiles.
 
 .DESCRIPTION
     Controla todos os processos do projeto via PM2:

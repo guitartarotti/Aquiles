@@ -12,7 +12,7 @@ from ..excel_live_workbook_service import ExcelLiveWorkbookService
 from .math_utils import linear_interpolate, normalize_rate
 from .types import MarketContext
 
-logger = get_logger("mirofish.options_modeling.market_context")
+logger = get_logger("aquiles.options_modeling.market_context")
 _excel_live_workbook = ExcelLiveWorkbookService()
 
 

@@ -32,7 +32,7 @@ from app.services.options_store import OptionsStore
 from app.services.options_volume_tracker import OptionsVolumeTracker
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.options_volume_tracker_service")
+logger = get_logger("aquiles.options_volume_tracker_service")
 
 app = Flask(__name__)
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):

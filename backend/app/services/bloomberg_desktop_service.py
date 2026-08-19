@@ -7,7 +7,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .excel_bloomberg_service import ExcelBloombergService
 
-logger = get_logger("mirofish.bloomberg_desktop")
+logger = get_logger("aquiles.bloomberg_desktop")
 _excel_bloomberg = ExcelBloombergService()
 
 

@@ -147,7 +147,7 @@ async def add_text_batch(payload: Dict[str, Any]) -> Dict[str, Any]:
     graph_id = payload["graph_id"]
     ontology = payload.get("ontology") or {}
     chunks = payload.get("chunks") or []
-    source_description = payload.get("source_description", "MiroFish Graphiti Local Graph")
+    source_description = payload.get("source_description", "Aquiles Graphiti Local Graph")
     graph_name = payload.get("graph_name", graph_id)
 
     entity_types = build_entity_types(ontology)

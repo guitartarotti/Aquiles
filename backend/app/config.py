@@ -366,7 +366,7 @@ class Config:
     ).lower() == 'true'
     ETF_DAILY_FLOW_USER_AGENT = os.environ.get(
         'ETF_DAILY_FLOW_USER_AGENT',
-        'MiroFish ETF daily flow research collector/1.0 (+https://localhost)',
+        'Aquiles ETF daily flow research collector/1.0 (+https://localhost)',
     )
     ETF_DAILY_FLOW_UNIVERSE_JSON = os.environ.get('ETF_DAILY_FLOW_UNIVERSE_JSON', '')
 

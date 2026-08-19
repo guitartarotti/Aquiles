@@ -28,7 +28,7 @@ from bs4 import BeautifulSoup, NavigableString
 from ..config import Config
 from ..utils.logger import get_logger
 
-logger = get_logger("mirofish.etf_daily_flow")
+logger = get_logger("aquiles.etf_daily_flow")
 
 ETF_DAILY_FLOW_SCHEMA_VERSION = 1
 

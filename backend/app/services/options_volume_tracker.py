@@ -25,7 +25,7 @@ from ..utils.logger import get_logger
 from .options_store import OptionsStore
 from .vol_index.iv_surface import extract_iv_metrics
 
-logger = get_logger("mirofish.options_volume_tracker")
+logger = get_logger("aquiles.options_volume_tracker")
 
 _MONTHLY_IV_FIELDS = [
     "OPT_EXPIRE_DT",

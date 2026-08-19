@@ -26,7 +26,7 @@ except Exception:  # pragma: no cover - handled at runtime
     nn = None
 
 
-logger = get_logger("mirofish.options_fair_value.intraday_correlation_history")
+logger = get_logger("aquiles.options_fair_value.intraday_correlation_history")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 

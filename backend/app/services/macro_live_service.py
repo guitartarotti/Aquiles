@@ -24,7 +24,7 @@ from ..models.project import ProjectManager, ProjectStatus
 from ..utils.logger import get_logger
 from .bloomberg_desktop_service import BloombergDesktopService
 
-logger = get_logger('mirofish.macro_live')
+logger = get_logger('aquiles.macro_live')
 EVENT_CLASSIFICATION_VERSION = "macro-headline-freeze-v5-contextual-scope"
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 

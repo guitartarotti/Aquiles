@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from ..utils.logger import get_logger
 
-logger = get_logger('mirofish.simulation_ipc')
+logger = get_logger('aquiles.simulation_ipc')
 
 
 class CommandType(str, Enum):

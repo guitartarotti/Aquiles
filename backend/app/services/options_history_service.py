@@ -10,7 +10,7 @@ from .options_data_provider import get_options_data_provider
 from .options_snapshot_service import OptionsSnapshotService
 from .options_store import OptionsStore
 
-logger = get_logger("mirofish.options_history")
+logger = get_logger("aquiles.options_history")
 
 
 def _daily_oi_checkpoint_key(underlying_security: str, trade_date: str) -> str:

@@ -9,7 +9,7 @@ from ...utils.llm_client import LLMClient
 from ...utils.logger import get_logger
 from ..options_store import OptionsStore
 
-logger = get_logger("mirofish.options_modeling.daily_insights")
+logger = get_logger("aquiles.options_modeling.daily_insights")
 
 
 class OptionsDailyInsightService:

@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Set
 from ..utils.logger import get_logger
 from .graph_builder import GraphBuilderService
 
-logger = get_logger("mirofish.zep_entity_reader")
+logger = get_logger("aquiles.zep_entity_reader")
 
 
 @dataclass

@@ -36,7 +36,7 @@ from app.services.market_screen_capture_service import MarketScreenCaptureServic
 from app.services.market_screen_chart_service import MarketScreenChartService
 from app.utils.logger import get_logger
 
-logger = get_logger("mirofish.discovery_market_service")
+logger = get_logger("aquiles.discovery_market_service")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 app = Flask(__name__)

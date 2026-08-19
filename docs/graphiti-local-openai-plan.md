@@ -33,7 +33,7 @@ This creates a hard dependency on `ZEP_API_KEY` and blocks local-first deploymen
 
 ### Minimum local stack
 
-- `MiroFish backend`
+- `Aquiles backend`
 - `Graphiti core`
 - `Neo4j 5.26+`
 - `OpenAI API key`
@@ -88,7 +88,7 @@ Use a standard OpenAI project key for:
 
 - extraction / structured output
 - reranking if needed by the Graphiti integration path
-- any scenario generation still handled by MiroFish
+- any scenario generation still handled by Aquiles
 
 ## Migration Strategy
 
@@ -115,7 +115,7 @@ Implement a `GraphitiLocalBackend` using:
 - Neo4j local
 - OpenAI client
 
-This backend should accept the same ontology/text inputs already produced by MiroFish.
+This backend should accept the same ontology/text inputs already produced by Aquiles.
 
 ### Phase 3. Tool migration
 

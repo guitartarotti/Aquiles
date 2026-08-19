@@ -24,7 +24,7 @@ from ..utils.logger import get_logger
 from .macro_persona_service import MACRO_PERSONA_ENTITY_TYPES
 from .zep_entity_reader import EntityNode
 
-logger = get_logger('mirofish.simulation_config')
+logger = get_logger('aquiles.simulation_config')
 
 # 中国作息时间配置（北京时间）
 CHINA_TIMEZONE_CONFIG = {

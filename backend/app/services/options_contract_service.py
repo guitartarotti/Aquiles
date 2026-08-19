@@ -9,7 +9,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .options_store import OptionsStore
 
-logger = get_logger("mirofish.options_contracts")
+logger = get_logger("aquiles.options_contracts")
 
 OPTION_TICKER_PATTERN = re.compile(
     r"^(?P<root>.+?)\s+(?P<expiry>\d{2}/\d{2}/\d{2})\s+(?P<put_call>[CP])(?P<strike>\d+(?:\.\d+)?)\s+(?P<suffix>.+)$"

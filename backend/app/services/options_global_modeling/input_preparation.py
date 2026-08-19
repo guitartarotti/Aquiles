@@ -9,7 +9,7 @@ from ...config import Config
 from ...utils.logger import get_logger
 from .types import GlobalAssetConfig, GlobalTriangulationConfig
 
-logger = get_logger("mirofish.options_global.input_preparation")
+logger = get_logger("aquiles.options_global.input_preparation")
 
 
 DEFAULT_ASSET_CONFIGS: list[dict[str, Any]] = [

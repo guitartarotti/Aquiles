@@ -17,7 +17,7 @@ from ..utils.logger import get_logger
 from .macro_driver_service import PERSISTED_CROSS_ASSET_VERSION, MacroDriverService
 from .macro_live_service import MacroIngestionService, MacroStateStore
 
-logger = get_logger("mirofish.macro_cross_asset")
+logger = get_logger("aquiles.macro_cross_asset")
 
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 CROSS_ASSET_BUCKETS = ("general", "credit", "equity", "commodity", "fx", "rates")

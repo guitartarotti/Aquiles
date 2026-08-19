@@ -91,7 +91,23 @@ npm run dev
 npm run check
 ```
 
-Esse comando executa Ruff no backend, ESLint sem tolerância a avisos, testes Python e JavaScript e o build de produção. A mesma sequência roda no GitHub Actions com Python 3.11 e Node 24. O pipeline aplica um piso incremental de cobertura global, preserva cobertura superior a 90% em autenticação e mantém um gate dedicado para o domínio de Funds Flow. Os pisos sobem junto com os testes até as metas de 40% global e 60% nos fluxos críticos.
+Esse comando executa Ruff e mypy no backend, ESLint e TypeScript no frontend, testes Python e JavaScript e o build de produção. A mesma sequência roda no GitHub Actions com Python 3.11 e Node 24. O pipeline aplica um piso incremental de cobertura global, preserva cobertura superior a 90% em autenticação e mantém um gate dedicado para o domínio de Funds Flow. Os pisos sobem junto com os testes até as metas de 40% global e 60% nos fluxos críticos.
+
+A tipagem é gradual e bloqueante dentro do escopo adotado. O mypy começa em modo estrito nos módulos matemáticos extraídos; o TypeScript usa `checkJs` estrito nos contratos de autenticação, layout e formatação. Novos módulos puros devem entrar nesses escopos, e módulos legados são adicionados por domínio depois de corrigidos, sem ignorar erros no gate.
+
+```powershell
+npm run typecheck
+```
+
+O frontend possui três níveis de validação:
+
+```powershell
+npm --prefix frontend run test:unit
+npm --prefix frontend run test:components
+npm --prefix frontend run test:e2e
+```
+
+Os testes de componentes usam DOM isolado. As jornadas E2E usam Chromium headless e APIs simuladas para validar autenticação, redirecionamento, navegação, persistência do Discovery e logout sem depender dos microserviços locais. O GitHub Actions instala o navegador e executa as três camadas em cada push e pull request.
 
 ## Dados e segurança
 
@@ -116,4 +132,4 @@ Coloque o JSON produzido em `AQUILES_AUTH_USERS_JSON` e mantenha
 
 ## Origem e licença
 
-O módulo de simulação multiagente foi originalmente derivado do projeto [MiroFish](https://github.com/666ghj/MiroFish) e evoluído no Aquiles com serviços de mercado, modelos quantitativos, integrações, persistência e interface próprias. O projeto permanece sob AGPL-3.0; consulte [LICENSE](LICENSE). O motor OASIS pertence ao ecossistema CAMEL-AI.
+Aquiles é a identidade única do produto, da interface, dos serviços e dos artefatos operacionais deste repositório. O módulo de simulação multiagente possui origem histórica no projeto MiroFish. A atribuição completa, a ausência de vínculo atual e os componentes de terceiros estão documentados em [NOTICE.md](NOTICE.md). O projeto permanece sob AGPL-3.0; consulte [LICENSE](LICENSE).

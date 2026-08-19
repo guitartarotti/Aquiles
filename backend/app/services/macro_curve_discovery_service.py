@@ -15,7 +15,7 @@ from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from .market_screen_chart_service import MarketScreenChartService, _safe_float
 
-logger = get_logger("mirofish.macro_curve_discovery")
+logger = get_logger("aquiles.macro_curve_discovery")
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
 

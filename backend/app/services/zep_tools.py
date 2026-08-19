@@ -24,7 +24,7 @@ from ..utils.locale import get_locale, t
 from ..utils.logger import get_logger
 from .graph_builder import GraphBuilderService
 
-logger = get_logger('mirofish.zep_tools')
+logger = get_logger('aquiles.zep_tools')
 
 
 @dataclass

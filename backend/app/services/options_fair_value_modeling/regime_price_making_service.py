@@ -18,7 +18,7 @@ from .nonlinear_dependence_engine import build_nonlinear_dependence
 from .price_making_engine import build_leg_price_making
 from .regime_state_machine import run_regime_state_machine
 
-logger = get_logger("mirofish.options_fair_value.regime_price_making")
+logger = get_logger("aquiles.options_fair_value.regime_price_making")
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:

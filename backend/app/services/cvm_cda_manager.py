@@ -13,7 +13,7 @@ from ..utils.atomic_io import atomic_json_dump
 from ..utils.logger import get_logger
 from .cvm_cda_service import LOCAL_TZ, CvmCdaService, _clean_json, _local_now, _utc_now
 
-logger = get_logger("mirofish.cvm_cda")
+logger = get_logger("aquiles.cvm_cda")
 
 
 class CvmCdaManager:
