@@ -54,7 +54,7 @@ jobs:
           --cov=app
           --cov-branch
           --cov-report=term-missing
-          --cov-fail-under=11.5
+          --cov-fail-under=30
 
       - name: Enforce authentication coverage
         working-directory: backend
@@ -70,6 +70,8 @@ jobs:
         run: >-
           uv run pytest tests/test_funds_flow_domain.py
           --cov=app.services.funds_flow_local_service
+          --cov=app.services.funds_flow_anbima_ici
+          --cov=app.services.funds_flow_analytics
           --cov=app.services.funds_flow_utils
           --cov=app.services.funds_flow_insights
           --cov-branch
