@@ -48,6 +48,7 @@ def _source_files(
 def check_file_sizes(repo_root: Path, budget: dict[str, Any]) -> list[str]:
     config = budget["file_size"]
     legacy = {str(path): int(limit) for path, limit in config.get("legacy", {}).items()}
+    absolute_limit = int(config.get("absolute_max_lines", 0))
     violations: list[str] = []
     visited_allowances: set[str] = set()
 
@@ -62,6 +63,8 @@ def check_file_sizes(repo_root: Path, budget: dict[str, Any]) -> list[str]:
             relative = _relative_path(repo_root, path)
             line_count = len(path.read_text(encoding="utf-8-sig", errors="replace").splitlines())
             limit = legacy.get(relative, default_limit)
+            if absolute_limit > 0:
+                limit = min(limit, absolute_limit)
             if relative in legacy:
                 visited_allowances.add(relative)
             if line_count > limit:

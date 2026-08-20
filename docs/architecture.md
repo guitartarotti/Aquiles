@@ -111,6 +111,12 @@ modelos acoplados à UI, ciclos de importação e adaptadores concretos importad
 rotas backend. Arquivos em `views/` e nos caminhos legados permanecem como fachadas
 curtas enquanto consumidores externos migram para as features.
 
+O grafo backend não possui ciclos permitidos. A análise de drivers macro depende de
+`MacroIngestionPort`, e a composição concreta fica em `macro_driver_factory.py`. Os
+modelos intraday dependem somente de `IntradayContextReader`; o heatmap injeta seu
+contexto ao disparar as correlações. Assim, ingestão, análise e modelagem permanecem
+substituíveis em testes sem importar seus orquestradores de volta.
+
 ## Tipagem gradual
 
 Os contratos puros do frontend são verificados com TypeScript em modo `checkJs` e `strict`, mantendo os arquivos JavaScript compatíveis durante a migração. O escopo inicial está em `frontend/tsconfig.typecheck.json` e deve crescer por domínio sempre que um módulo for estabilizado.
@@ -177,10 +183,17 @@ migrados por domínio quando precisarem de escrita compartilhada.
 
 ## Evolução
 
-Os maiores módulos ainda devem ser divididos por caso de uso, mantendo contratos e testes antes de cada extração. A ordem recomendada é:
+O primeiro corte de modularidade foi concluído: nenhum arquivo permanece acima de
+3.000 linhas. Serviços financeiros foram divididos em contratos, provedores e mixins
+por capacidade; os widgets Funds Flow e Macro Heatmap agora usam contextos injetados,
+componentes de painel e módulos de cálculo menores que 500 linhas. As fachadas antigas
+continuam estáveis para preservar rotas e consumidores durante a migração.
+
+Os maiores módulos restantes devem continuar sendo divididos por caso de uso,
+mantendo contratos e testes antes de cada extração. A próxima ordem recomendada é:
 
 1. continuar a extração de DTOs e validação das APIs de opções e macro;
 2. separar ingestão, normalização e agregação em CVM/Funds Flow;
-3. decompor widgets Vue acima de 1.000 linhas em composables e componentes de visualização;
+3. decompor as fachadas Vue ainda acima de 1.000 linhas em composables e componentes de visualização;
 4. criar testes de contrato para todos os health checks e payloads críticos;
 5. mover tarefas assíncronas de modelagem, relatórios e simulações para RQ ou Dramatiq quando houver Redis operacional.

@@ -220,7 +220,7 @@ class MacroCrossAssetService:
     def __init__(self, store: Optional[MacroStateStore] = None) -> None:
         self.store = store or MacroStateStore()
         self.ingestion = MacroIngestionService(store=self.store)
-        self.driver_service = MacroDriverService(store=self.store)
+        self.driver_service = MacroDriverService(store=self.store, ingestion=self.ingestion)
         self.cache_path = os.path.join(self.store.root_dir, "cross_asset_state.json")
 
     def get_engine(self, limit: int = DEFAULT_CROSS_ASSET_ENGINE_LIMIT, refresh: bool = False) -> Dict[str, Any]:

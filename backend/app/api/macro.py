@@ -21,7 +21,7 @@ from ..services.bloomberg_desktop_service import BloombergDesktopService
 from ..services.fair_value_legs_chart_service import FairValueLegsChartService
 from ..services.macro_cross_asset_service import MacroCrossAssetService
 from ..services.macro_curve_discovery_service import MacroCurveDiscoveryService
-from ..services.macro_driver_service import MacroDriverService
+from ..services.macro_driver_factory import build_macro_driver_service
 from ..services.macro_live_service import (
     MacroCollectorManager,
     MacroIngestionService,
@@ -382,7 +382,7 @@ def list_macro_drivers() -> ResponseReturnValue:
     try:
         limit = max(1, min(int(request.args.get("limit", 12)), 100))
         refresh = str(request.args.get("refresh", "false")).lower() == "true"
-        service = MacroDriverService(store=MacroStateStore())
+        service = build_macro_driver_service()
         result = service.list_drivers(limit=limit, refresh=refresh)
         return jsonify(
             {
@@ -399,7 +399,7 @@ def focus_macro_driver() -> ResponseReturnValue:
     try:
         data = request.get_json(silent=True) or {}
         store = MacroStateStore()
-        service = MacroDriverService(store=store)
+        service = build_macro_driver_service(store=store)
         result = service.focus_driver(
             driver_id=data.get("driver_id", ""),
             refresh=bool(data.get("refresh", False)),

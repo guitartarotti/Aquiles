@@ -11,7 +11,6 @@ import zipfile
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -20,6 +19,27 @@ from ..config import Config
 from ..domains.market_data.domain import cvm_cda as cvm_cda_domain
 from ..utils.atomic_io import atomic_json_dump
 from ..utils.logger import get_logger
+from .cvm_cda_contracts import (
+    CDA_TARGET_LABELS,
+    CDA_TARGET_SQL,
+    CVM_CDA_DATASET_URL,
+    CVM_CDA_PACKAGE,
+    CVM_CDA_PATTERN,
+    CVM_CDA_SCHEMA_VERSION,
+    CVM_CKAN_PACKAGE_URL,
+    HOLDING_CORE_COLUMNS,
+    LOCAL_TZ,
+    RADAR_BUCKET_META,
+    RADAR_CONFIDENTIAL_SALEABILITY_DISCOUNT,
+    RADAR_DEFAULT_BUCKET,
+    RADAR_DEFENSIVE_FLOOR,
+    RADAR_MIN_DAYS_SINCE_CDA,
+    RADAR_MIN_MONTH_ROWS,
+    RADAR_PLAUSIBLE_BUCKET_SHARE,
+    RADAR_PLAUSIBLE_HORIZON_DAYS,
+    RADAR_SCENARIOS,
+)
+from .cvm_cda_queries import CvmCdaQueriesMixin
 
 logger = get_logger("aquiles.cvm_cda")
 
@@ -39,209 +59,7 @@ _safe_div = cvm_cda_domain.safe_div
 _safe_float = cvm_cda_domain.safe_float
 _source_block = cvm_cda_domain.source_block
 
-LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
-CVM_CDA_SCHEMA_VERSION = 2
-CVM_CDA_PACKAGE = "fi-doc-cda"
-CVM_CKAN_PACKAGE_URL = "https://dados.cvm.gov.br/api/3/action/package_show"
-CVM_CDA_PATTERN = "https://dados.cvm.gov.br/dados/FI/DOC/CDA/DADOS/cda_fi_{yyyymm}.zip"
-CVM_CDA_DATASET_URL = "https://dados.cvm.gov.br/dataset/fi-doc-cda"
-
-CDA_TARGET_LABELS = {
-    "foreign": "Exterior",
-    "public_bonds": "Titulos publicos",
-    "private_credit": "Credito privado",
-    "fund_quotas": "Cotas de fundos",
-    "equity": "Acoes",
-    "derivatives": "Derivativos",
-    "confidential": "Confidencial",
-}
-
-CDA_TARGET_SQL = {
-    "foreign": "is_foreign = 1",
-    "public_bonds": "asset_class = 'Titulos Publicos'",
-    "private_credit": "asset_class IN ('Credito Privado', 'Depositos e IF', 'Agronegocio/Credito')",
-    "fund_quotas": "is_fund_quota = 1",
-    "equity": "asset_class = 'Acoes'",
-    "derivatives": "is_derivative = 1",
-    "confidential": "is_confidential = 1",
-}
-
-HOLDING_NUMERIC_COLUMNS = (
-    "qty_final",
-    "value_market",
-    "value_cost",
-    "value_buy",
-    "value_sell",
-)
-
-HOLDING_CORE_COLUMNS = (
-    "month",
-    "source_file",
-    "source_block",
-    "fund_type",
-    "fund_cnpj",
-    "fund_name",
-    "dt_comptc",
-    "tp_aplic",
-    "tp_ativo",
-    "tp_negoc",
-    "asset_class",
-    "asset_subclass",
-    "asset_code",
-    "asset_desc",
-    "isin",
-    "issuer_name",
-    "issuer_doc",
-    "risk_issuer",
-    "country_code",
-    "country",
-    "market",
-    "maturity_date",
-    "maturity_bucket",
-    "qty_final",
-    "value_market",
-    "value_cost",
-    "value_buy",
-    "value_sell",
-    "is_confidential",
-    "is_foreign",
-    "is_fund_quota",
-    "is_derivative",
-    "is_related_issuer",
-)
-
-RADAR_BUCKET_META = {
-    "Titulos Publicos": {
-        "bucket": "sovereign_liquidity",
-        "label": "Juros soberanos",
-        "rank": 1,
-        "saleability_share": 0.96,
-    },
-    "Depositos e IF": {
-        "bucket": "cash_liquidity",
-        "label": "Caixa e IF",
-        "rank": 2,
-        "saleability_share": 0.92,
-    },
-    "Acoes": {
-        "bucket": "listed_equity",
-        "label": "Bolsa local",
-        "rank": 3,
-        "saleability_share": 0.68,
-    },
-    "Investimento Exterior": {
-        "bucket": "global_liquid",
-        "label": "Exterior liquido",
-        "rank": 4,
-        "saleability_share": 0.58,
-    },
-    "Derivativos": {
-        "bucket": "derivatives_overlay",
-        "label": "Derivativos/margem",
-        "rank": 5,
-        "saleability_share": 0.32,
-    },
-    "Cotas de Fundos": {
-        "bucket": "fund_quotas",
-        "label": "Cotas de fundos",
-        "rank": 6,
-        "saleability_share": 0.38,
-    },
-    "Credito Privado": {
-        "bucket": "private_credit",
-        "label": "Credito privado",
-        "rank": 7,
-        "saleability_share": 0.24,
-    },
-    "Agronegocio/Credito": {
-        "bucket": "structured_credit",
-        "label": "Credito estruturado",
-        "rank": 8,
-        "saleability_share": 0.18,
-    },
-    "Fundos Estruturados": {
-        "bucket": "structured_funds",
-        "label": "Fundos estruturados",
-        "rank": 9,
-        "saleability_share": 0.14,
-    },
-    "Confidencial": {
-        "bucket": "confidential",
-        "label": "Confidencial",
-        "rank": 10,
-        "saleability_share": 0.05,
-    },
-    "Outros": {
-        "bucket": "other_assets",
-        "label": "Outros",
-        "rank": 11,
-        "saleability_share": 0.22,
-    },
-}
-
-RADAR_DEFAULT_BUCKET = {
-    "bucket": "other_assets",
-    "label": "Outros",
-    "rank": 11,
-    "saleability_share": 0.20,
-}
-
-RADAR_DEFENSIVE_FLOOR = {
-    "RENDA FIXA": 0.18,
-    "MULTIMERCADO": 0.12,
-    "ACOES": 0.38,
-    "CAMBIAL": 0.32,
-    "PREVIDENCIA": 0.18,
-    "ETF": 0.48,
-    "FII": 0.35,
-    "FIDC": 0.45,
-    "FIP": 0.62,
-    "FIAGRO": 0.40,
-    "OUTROS": 0.25,
-    "UNCLASSIFIED": 0.25,
-}
-
-RADAR_SCENARIOS = (
-    {
-        "key": "base",
-        "label": "Base",
-        "description": "Usa a media de resgate bruto recente de 21 dias uteis.",
-        "multiplier": 1.0,
-    },
-    {
-        "key": "stress",
-        "label": "Stress",
-        "description": "Usa o pior ritmo bruto recente entre 5d e 21d, com margem adicional.",
-        "multiplier": 1.2,
-    },
-    {
-        "key": "extreme",
-        "label": "Extremo",
-        "description": "Amplifica o stress com ancora no dia mais forte de resgate bruto recente.",
-        "multiplier": 1.55,
-    },
-)
-
-RADAR_CONFIDENTIAL_SALEABILITY_DISCOUNT = 0.50
-RADAR_PLAUSIBLE_HORIZON_DAYS = 30
-RADAR_MIN_DAYS_SINCE_CDA = int(os.environ.get("CVM_CDA_RADAR_MIN_DAYS_SINCE_CDA", "29"))
-RADAR_MIN_MONTH_ROWS = int(os.environ.get("CVM_CDA_RADAR_MIN_MONTH_ROWS", "100000"))
-RADAR_PLAUSIBLE_BUCKET_SHARE = {
-    "sovereign_liquidity": 0.18,
-    "cash_liquidity": 0.70,
-    "listed_equity": 0.14,
-    "global_liquid": 0.12,
-    "derivatives_overlay": 0.10,
-    "fund_quotas": 0.06,
-    "private_credit": 0.04,
-    "structured_credit": 0.025,
-    "structured_funds": 0.02,
-    "confidential": 0.02,
-    "other_assets": 0.05,
-}
-
-RADAR_CACHE_TTL_SECONDS = 1800
-
+__all__ = ["CdaRemoteMonth", "CvmCdaService", "LOCAL_TZ"]
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -299,8 +117,7 @@ def _series_str(frame: pd.DataFrame, column: str) -> pd.Series:
         .str.strip()
     )
 
-
-class CvmCdaService:
+class CvmCdaService(CvmCdaQueriesMixin):
     def __init__(self, data_dir: str | None = None) -> None:
         self.root_dir = Path(
             data_dir
@@ -912,277 +729,7 @@ class CvmCdaService:
                 "ai_readiness": self._build_insights(report, kpis, summaries, top_issuers),
             }
 
-    def list_funds(
-        self,
-        *,
-        target: str = "foreign",
-        side: str = "long",
-        month: str | None = None,
-        page: int = 1,
-        per_page: int = 25,
-    ) -> dict[str, Any]:
-        target = self._normalize_target(target)
-        side = self._normalize_side(side)
-        page, per_page, offset = self._pagination(page, per_page, max_per_page=100)
-        order_col = {"long": "long_value", "short": "short_value", "net": "net_value"}[side]
-        filter_sql = {
-            "long": "AND COALESCE(long_value, 0) > 0",
-            "short": "AND COALESCE(short_value, 0) > 0",
-            "net": "AND ABS(COALESCE(net_value, 0)) > 0",
-        }[side]
-        self.init_db()
-        with self._connect() as con:
-            resolved = self._resolve_month(con, month)
-            if not resolved:
-                return {
-                    "ok": False,
-                    "success": False,
-                    "error": "CVM CDA database is empty.",
-                    "rows": [],
-                }
-            total = con.execute(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM cvm_cda_fund_target_exposure
-                WHERE month = ? AND target = ?
-                {filter_sql}
-                """,
-                (resolved, target),
-            ).fetchone()["total"]
-            rows = [
-                dict(row)
-                for row in con.execute(
-                    f"""
-                SELECT
-                    fund_cnpj, target, target_label, fund_name, fund_type, dt_comptc, pl,
-                    long_value, short_value, net_value, gross_value, target_pct_pl,
-                    holdings_count, issuers_count, assets_count, top_issuer, top_asset_class,
-                    concentration_pct, {order_col} AS selected_value
-                FROM cvm_cda_fund_target_exposure
-                WHERE month = ? AND target = ?
-                {filter_sql}
-                ORDER BY {order_col} DESC
-                LIMIT ? OFFSET ?
-                """,
-                    (resolved, target, per_page, offset),
-                ).fetchall()
-            ]
-            for index, row in enumerate(rows, start=offset + 1):
-                row["rank"] = index
-            return {
-                "ok": True,
-                "success": True,
-                "month": resolved,
-                "target": target,
-                "target_label": CDA_TARGET_LABELS[target],
-                "side": side,
-                "page": page,
-                "per_page": per_page,
-                "total": total,
-                "rows": rows,
-            }
 
-    def list_assets(
-        self,
-        *,
-        target: str = "foreign",
-        side: str = "long",
-        month: str | None = None,
-        page: int = 1,
-        per_page: int = 25,
-    ) -> dict[str, Any]:
-        target = self._normalize_target(target)
-        side = self._normalize_side(side)
-        page, per_page, offset = self._pagination(page, per_page, max_per_page=100)
-        order_col = {"long": "long_value", "short": "short_value", "net": "net_value"}[side]
-        filter_sql = {
-            "long": "AND COALESCE(long_value, 0) > 0",
-            "short": "AND COALESCE(short_value, 0) > 0",
-            "net": "AND ABS(COALESCE(net_value, 0)) > 0",
-        }[side]
-        self.init_db()
-        with self._connect() as con:
-            resolved = self._resolve_month(con, month)
-            if not resolved:
-                return {
-                    "ok": False,
-                    "success": False,
-                    "error": "CVM CDA database is empty.",
-                    "rows": [],
-                }
-            total = con.execute(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM cvm_cda_asset_target_exposure
-                WHERE month = ? AND target = ?
-                {filter_sql}
-                """,
-                (resolved, target),
-            ).fetchone()["total"]
-            rows = [
-                dict(row)
-                for row in con.execute(
-                    f"""
-                SELECT
-                    security_key, issuer_name, asset_desc, asset_class, country,
-                    long_value, short_value, net_value, gross_value, fund_count, holding_count,
-                    {order_col} AS selected_value
-                FROM cvm_cda_asset_target_exposure
-                WHERE month = ? AND target = ?
-                {filter_sql}
-                ORDER BY {order_col} DESC
-                LIMIT ? OFFSET ?
-                """,
-                    (resolved, target, per_page, offset),
-                ).fetchall()
-            ]
-            for index, row in enumerate(rows, start=offset + 1):
-                row["rank"] = index
-            return {
-                "ok": True,
-                "success": True,
-                "month": resolved,
-                "target": target,
-                "target_label": CDA_TARGET_LABELS[target],
-                "side": side,
-                "page": page,
-                "per_page": per_page,
-                "total": total,
-                "rows": rows,
-            }
-
-    def list_fund_holdings(
-        self,
-        fund_cnpj: str,
-        *,
-        target: str = "foreign",
-        side: str = "all",
-        month: str | None = None,
-        page: int = 1,
-        per_page: int = 40,
-    ) -> dict[str, Any]:
-        fund_cnpj = str(fund_cnpj or "").strip()
-        if not fund_cnpj:
-            raise ValueError("fund_cnpj is required")
-        target = self._normalize_target(target)
-        side = self._normalize_side(side, allow_all=True)
-        page, per_page, offset = self._pagination(page, per_page, max_per_page=120)
-        condition = CDA_TARGET_SQL[target]
-        side_filter = ""
-        if side == "long":
-            side_filter = "AND COALESCE(value_market, 0) > 0"
-        elif side == "short":
-            side_filter = "AND COALESCE(value_market, 0) < 0"
-        self.init_db()
-        with self._connect() as con:
-            resolved = self._resolve_month(con, month)
-            if not resolved:
-                return {
-                    "ok": False,
-                    "success": False,
-                    "error": "CVM CDA database is empty.",
-                    "rows": [],
-                }
-            total = con.execute(
-                f"""
-                SELECT COUNT(*) AS total
-                FROM cvm_cda_holdings
-                WHERE month = ? AND fund_cnpj = ? AND ({condition}) {side_filter}
-                """,
-                (resolved, fund_cnpj),
-            ).fetchone()["total"]
-            fund = con.execute(
-                "SELECT * FROM cvm_cda_fund_summary WHERE month = ? AND fund_cnpj = ?",
-                (resolved, fund_cnpj),
-            ).fetchone()
-            rows = [
-                dict(row)
-                for row in con.execute(
-                    f"""
-                SELECT
-                    source_block, fund_cnpj, fund_name, dt_comptc, tp_aplic, tp_ativo,
-                    asset_class, asset_subclass, asset_code, asset_desc, isin,
-                    issuer_name, issuer_doc, country, maturity_date, maturity_bucket,
-                    qty_final, value_market, value_cost, value_buy, value_sell,
-                    is_confidential, is_foreign, is_related_issuer,
-                    CASE WHEN COALESCE(value_market, 0) < 0 THEN 'short' ELSE 'long' END AS position_side
-                FROM cvm_cda_holdings
-                WHERE month = ? AND fund_cnpj = ? AND ({condition}) {side_filter}
-                ORDER BY ABS(COALESCE(value_market, 0)) DESC
-                LIMIT ? OFFSET ?
-                """,
-                    (resolved, fund_cnpj, per_page, offset),
-                ).fetchall()
-            ]
-            for index, row in enumerate(rows, start=offset + 1):
-                row["rank"] = index
-            return {
-                "ok": True,
-                "success": True,
-                "month": resolved,
-                "target": target,
-                "target_label": CDA_TARGET_LABELS[target],
-                "side": side,
-                "page": page,
-                "per_page": per_page,
-                "total": total,
-                "fund": dict(fund) if fund else {"fund_cnpj": fund_cnpj},
-                "rows": rows,
-            }
-
-    def get_positioning_lab(self, month: str | None = None) -> dict[str, Any]:
-        self.init_db()
-        with self._connect() as con:
-            resolved = self._resolve_month(con, month)
-            if not resolved:
-                return {"ok": False, "success": False, "error": "CVM CDA database is empty."}
-            heatmap = self._build_heatmap(con, resolved)
-            class_mix = self._summary_rows(con, resolved, "asset_class", 18)
-            fund_type_mix = self._summary_rows(con, resolved, "fund_type", 18)
-            concentration = [
-                dict(row)
-                for row in con.execute(
-                    """
-                SELECT fund_cnpj, fund_name, fund_type, pl, max_position_value, concentration_pct,
-                       foreign_pct_pl, private_credit_pct_pl, confidential_pct_pl, turnover_pct_pl
-                FROM cvm_cda_fund_summary
-                WHERE month = ?
-                ORDER BY concentration_pct DESC
-                LIMIT 80
-                """,
-                    (resolved,),
-                ).fetchall()
-            ]
-            issuer_crowding = self._summary_rows(con, resolved, "issuer", 40)
-            edge_funds = [
-                dict(row)
-                for row in con.execute(
-                    """
-                SELECT fund_cnpj, fund_name, fund_type, pl, foreign_pct_pl, private_credit_pct_pl,
-                       confidential_pct_pl, concentration_pct,
-                       (COALESCE(foreign_pct_pl, 0) * 0.35
-                        + COALESCE(private_credit_pct_pl, 0) * 0.25
-                        + COALESCE(confidential_pct_pl, 0) * 0.25
-                        + COALESCE(concentration_pct, 0) * 0.15) AS edge_score
-                FROM cvm_cda_fund_summary
-                WHERE month = ?
-                ORDER BY edge_score DESC
-                LIMIT 40
-                """,
-                    (resolved,),
-                ).fetchall()
-            ]
-            return {
-                "ok": True,
-                "success": True,
-                "month": resolved,
-                "heatmap": heatmap,
-                "class_mix": class_mix,
-                "fund_type_mix": fund_type_mix,
-                "concentration": concentration,
-                "issuer_crowding": issuer_crowding,
-                "edge_funds": edge_funds,
-            }
 
     def get_redemption_radar(
         self, month: str | None = None, *, force: bool = False

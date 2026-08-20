@@ -14,10 +14,9 @@ from ..utils.atomic_io import atomic_json_dump
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from .macro_context_tokenizer import aggregate_macro_event_tokens, build_driver_llm_context_packet
-from .macro_live_service import MacroIngestionService, MacroStateStore
+from .macro_driver_ports import MacroIngestionPort, MacroStateStore
 
 logger = get_logger("aquiles.macro_drivers")
-
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 STOPWORDS = {
     "de", "da", "do", "das", "dos", "para", "com", "sem", "sobre", "entre",
@@ -78,11 +77,12 @@ class MacroDriverService:
 
     def __init__(
         self,
+        ingestion: MacroIngestionPort,
         store: Optional[MacroStateStore] = None,
         llm_client: Optional[LLMClient] = None,
     ):
         self.store = store or MacroStateStore()
-        self.ingestion = MacroIngestionService(store=self.store)
+        self.ingestion = ingestion
         self._llm_client = llm_client
         self.drivers_path = os.path.join(self.store.root_dir, "drivers_state.json")
 

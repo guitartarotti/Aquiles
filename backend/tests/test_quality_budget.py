@@ -66,6 +66,18 @@ def test_file_size_budget_rejects_new_oversized_files(tmp_path: Path) -> None:
     assert violations == ["file-size: backend/app/new_service.py has 6 lines; budget is 5"]
 
 
+def test_file_size_budget_caps_legacy_allowances(tmp_path: Path) -> None:
+    relative_path = "backend/app/legacy_service.py"
+    _write(tmp_path / relative_path, "\n".join(f"line_{index} = 1" for index in range(8)))
+    budget = _minimal_budget(max_lines=5)
+    budget["file_size"]["absolute_max_lines"] = 7
+    budget["file_size"]["legacy"] = {relative_path: 10}
+
+    violations = QUALITY_BUDGET.check_file_sizes(tmp_path, budget)
+
+    assert violations == [f"file-size: {relative_path} has 8 lines; budget is 7"]
+
+
 def test_suppression_budget_rejects_increases(tmp_path: Path) -> None:
     _write(tmp_path / "backend/app/service.py", "value = call()  # type: ignore\nvalue = 1  # noqa: F841")
     _write(

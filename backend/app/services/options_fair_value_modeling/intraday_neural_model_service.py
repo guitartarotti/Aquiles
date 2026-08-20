@@ -13,8 +13,8 @@ from sklearn.linear_model import Ridge
 
 from ...config import Config
 from ...utils.logger import get_logger
-from ..macro_options_heatmap_context_service import MacroOptionsHeatmapContextService
 from ..options_store import OptionsStore
+from .context_port import IntradayContextReader
 from .intraday_dependency_service import IntradayDependencyService
 
 try:
@@ -115,12 +115,12 @@ class IntradayNeuralModelService:
     def __init__(
         self,
         *,
+        context_service: IntradayContextReader,
         store: OptionsStore | None = None,
-        context_service: MacroOptionsHeatmapContextService | None = None,
         dependency_service: IntradayDependencyService | None = None,
     ) -> None:
         self.store = store or OptionsStore()
-        self.context_service = context_service or MacroOptionsHeatmapContextService()
+        self.context_service = context_service
         self.dependency_service = dependency_service or IntradayDependencyService(
             store=self.store,
             context_service=self.context_service,
