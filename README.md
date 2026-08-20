@@ -246,7 +246,7 @@ Leia [SECURITY.md](SECURITY.md) antes de habilitar integrações reais.
 
 ## Origem e licença
 
-Aquiles é a identidade do produto, dos serviços e dos artefatos operacionais deste
+Aquiles é a identidade única do produto, dos serviços e dos artefatos operacionais deste
 repositório. O módulo de simulação multiagente possui origem histórica no MiroFish;
 a atribuição e a separação atual estão documentadas em [NOTICE.md](NOTICE.md).
 O projeto é distribuído sob a licença [AGPL-3.0](LICENSE).
