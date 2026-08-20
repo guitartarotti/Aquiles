@@ -11,6 +11,7 @@ import os
 import sys
 import threading
 from datetime import date
+from typing import Any
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -35,8 +36,7 @@ from app.utils.logger import get_logger
 logger = get_logger("aquiles.options_volume_tracker_service")
 
 app = Flask(__name__)
-if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
-    app.json.ensure_ascii = False
+setattr(app.json, "ensure_ascii", False)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 register_auth(app)
 register_error_handlers(app)
@@ -45,7 +45,7 @@ store = OptionsStore()
 tracker = OptionsVolumeTracker.get_instance()
 
 
-def _json_error(exc: Exception, status_code: int = 500):
+def _json_error(exc: Exception, status_code: int = 500) -> Any:
     return error_response(logger, status_code=status_code, exception=exc)
 
 
@@ -71,7 +71,7 @@ def _request_limit(default: int = 500, maximum: int = 5000) -> int:
 
 
 @app.route("/health", methods=["GET"])
-def health():
+def health() -> dict[str, Any]:
     try:
         status = tracker.status()
     except Exception:
@@ -86,7 +86,7 @@ def health():
 
 
 @app.route("/api/options/volume/activity", methods=["GET"])
-def volume_activity():
+def volume_activity() -> Any:
     try:
         session_date = request.args.get("session_date") or None
         symbol = request.args.get("symbol") or None
@@ -109,7 +109,7 @@ def volume_activity():
 
 
 @app.route("/api/options/volume/summary", methods=["GET"])
-def volume_activity_summary():
+def volume_activity_summary() -> Any:
     try:
         session_date = request.args.get("session_date") or date.today().isoformat()
         underlying = request.args.get("underlying_security") or None
@@ -123,7 +123,7 @@ def volume_activity_summary():
 
 
 @app.route("/api/options/volume/state", methods=["GET"])
-def volume_state():
+def volume_state() -> Any:
     try:
         state = store.load_volume_state()
         symbol = request.args.get("symbol")
@@ -135,9 +135,10 @@ def volume_state():
 
 
 @app.route("/api/options/volume/poll", methods=["POST"])
-def volume_poll():
+def volume_poll() -> Any:
     try:
-        body = request.get_json(silent=True) or {}
+        raw_body = request.get_json(silent=True)
+        body = raw_body if isinstance(raw_body, dict) else {}
         underlying = (
             body.get("underlying_security")
             or request.args.get("underlying_security")
@@ -150,7 +151,7 @@ def volume_poll():
 
 
 @app.route("/api/options/volume/poll/all", methods=["POST"])
-def volume_poll_all():
+def volume_poll_all() -> Any:
     try:
         return jsonify({"success": True, "data": tracker.poll_all_underlyings()})
     except Exception as exc:
@@ -158,7 +159,7 @@ def volume_poll_all():
 
 
 @app.route("/api/options/volume/tracker/status", methods=["GET"])
-def volume_tracker_status():
+def volume_tracker_status() -> Any:
     try:
         return jsonify({"success": True, "data": tracker.status()})
     except Exception as exc:
@@ -167,7 +168,7 @@ def volume_tracker_status():
 
 @app.route("/api/options/volume/tracker/start", methods=["POST"])
 @require_role("admin")
-def volume_tracker_start():
+def volume_tracker_start() -> Any:
     try:
         return jsonify({"success": True, "data": tracker.start()})
     except Exception as exc:
@@ -176,7 +177,7 @@ def volume_tracker_start():
 
 @app.route("/api/options/volume/tracker/stop", methods=["POST"])
 @require_role("admin")
-def volume_tracker_stop():
+def volume_tracker_stop() -> Any:
     try:
         return jsonify({"success": True, "data": tracker.stop()})
     except Exception as exc:
@@ -185,7 +186,7 @@ def volume_tracker_stop():
 
 @app.route("/api/options/volume/tracker/backfill", methods=["POST"])
 @require_role("admin")
-def volume_tracker_backfill():
+def volume_tracker_backfill() -> Any:
     try:
         status = tracker.status()
         if not status.get("running"):

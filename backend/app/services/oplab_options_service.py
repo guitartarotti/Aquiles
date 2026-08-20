@@ -1051,7 +1051,7 @@ class OpLabOptionsService:
         # Heuristica: prefixo numerico
         sample = tickers[0].strip().upper()
         # Remove sufixo numerico e letras de vencimento para obter o root
-        for bloomberg_key, oplab_val in self._underlying_map.items():
+        for _bloomberg_key, oplab_val in self._underlying_map.items():
             if sample.startswith(oplab_val):
                 return oplab_val
 

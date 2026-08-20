@@ -113,7 +113,7 @@ class OptionsUniverseService:
             grouped[str(row.get("expiry_date") or "")].append(row)
 
         selected_ids: set[str] = set()
-        for expiry, rows in grouped.items():
+        for _expiry, rows in grouped.items():
             rows_by_oi = sorted(rows, key=lambda row: row.get("open_int") or 0, reverse=True)
             rows_by_volume = sorted(rows, key=lambda row: row.get("px_volume") or 0, reverse=True)
             rows_by_atm = sorted(

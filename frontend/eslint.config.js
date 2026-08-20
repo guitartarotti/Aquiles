@@ -43,5 +43,29 @@ export default [
       'no-unreachable-loop': 'error',
     },
   },
+  {
+    files: ['src/features/*/components/**/*.{js,vue}'],
+    rules: {
+      'no-restricted-globals': ['error', { name: 'fetch', message: 'Use the feature api layer.' }],
+      'no-restricted-imports': ['error', {
+        paths: [
+          { name: 'axios', message: 'Use the feature api layer.' },
+          { name: '@/api', message: 'Components must import their local feature api.' },
+        ],
+        patterns: [
+          { group: ['@/api/*'], message: 'Components must import their local feature api.' },
+        ],
+      }],
+    },
+  },
+  {
+    files: ['src/features/*/models/**/*.js'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        paths: ['vue', 'vue-router', '@/api'],
+        patterns: ['@/api/*', '@/components/*'],
+      }],
+    },
+  },
   prettier,
 ]

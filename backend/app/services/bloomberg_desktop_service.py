@@ -14,7 +14,7 @@ _excel_bloomberg = ExcelBloombergService()
 class BloombergDesktopService:
     """Optional Bloomberg Desktop API connector via local BBComm."""
 
-    def __init__(self, config_class=Config):
+    def __init__(self, config_class: Any = Config) -> None:
         self.config = config_class
 
     def status(self) -> Dict[str, Any]:

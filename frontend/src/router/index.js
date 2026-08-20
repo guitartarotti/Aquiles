@@ -9,7 +9,7 @@ const SimulationRunView = () => import('../views/SimulationRunView.vue')
 const ReportView = () => import('../views/ReportView.vue')
 const InteractionView = () => import('../views/InteractionView.vue')
 const OptionsDashboardView = () => import('../views/OptionsDashboardView.vue')
-const MacroHeatmapView = () => import('../views/MacroHeatmapView.vue')
+const MacroHeatmapView = () => import('../features/macro-heatmap/components/MacroHeatmapView.vue')
 const ChartView = () => import('../views/ChartView.vue')
 const DiscoveryView = () => import('../views/DiscoveryView.vue')
 

@@ -1652,7 +1652,7 @@ class ReportAgent:
                     section=section,
                     outline=outline,
                     previous_sections=generated_sections,
-                    progress_callback=lambda stage, prog, msg:
+                    progress_callback=lambda stage, prog, msg, base_progress=base_progress:
                         progress_callback(
                             stage, 
                             base_progress + int(prog * 0.7 / total_sections),
@@ -1819,7 +1819,7 @@ class ReportAgent:
         tool_calls_made = []
         max_iterations = 2  # 减少迭代轮数
         
-        for iteration in range(max_iterations):
+        for _iteration in range(max_iterations):
             response = self.llm.chat(
                 messages=messages,
                 temperature=0.5

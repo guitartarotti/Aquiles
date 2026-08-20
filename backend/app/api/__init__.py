@@ -1,27 +1,44 @@
-"""
-API路由模块
-"""
+"""HTTP route composition for Aquiles business domains."""
 
-from flask import Blueprint
+from ..domains.funds_flow.api.routes import funds_flow_local_bp
+from ..domains.graph.routes import graph_bp
+from ..domains.macro.routes import macro_bp
+from ..domains.market_data.routes import cvm_cda_bp, nport_bp
+from ..domains.options.routes import options_bp
+from ..domains.reports.routes import report_bp
+from ..domains.simulations.routes import simulation_bp
 
-graph_bp = Blueprint('graph', __name__)
-simulation_bp = Blueprint('simulation', __name__)
-report_bp = Blueprint('report', __name__)
-macro_bp = Blueprint('macro', __name__)
-options_bp = Blueprint('options', __name__)
-funds_flow_local_bp = Blueprint('funds_flow_local', __name__)
-nport_bp = Blueprint('nport', __name__)
-cvm_cda_bp = Blueprint('cvm_cda', __name__)
+__all__ = [
+    "cvm_cda_bp",
+    "funds_flow_local_bp",
+    "graph_bp",
+    "macro_bp",
+    "nport_bp",
+    "options_bp",
+    "report_bp",
+    "simulation_bp",
+]
 
 from . import (
-    cvm_cda,  # noqa: E402, F401
-    funds_flow_local,  # noqa: E402, F401
-    graph,  # noqa: E402, F401
-    macro,  # noqa: E402, F401
-    nport,  # noqa: E402, F401
-    options,  # noqa: E402, F401
-    options_vol_index,  # noqa: E402, F401
-    options_volume,  # noqa: E402, F401
-    report,  # noqa: E402, F401
-    simulation,  # noqa: E402, F401
+    cvm_cda,
+    graph,
+    macro,
+    nport,
+    options_routes,
+    options_vol_index,
+    options_volume,
+    report,
+    simulation_routes,
+)
+
+_ROUTE_MODULES = (
+    cvm_cda,
+    graph,
+    macro,
+    nport,
+    options_routes,
+    options_vol_index,
+    options_volume,
+    report,
+    simulation_routes,
 )

@@ -2,21 +2,30 @@ from __future__ import annotations
 
 import math
 from statistics import NormalDist
-from typing import Any
+from typing import Any, TypedDict
 
 from ...config import Config
 from .math_utils import clamp, percentile, weighted_average, weighted_quantile
 from .types import MarketContext
 
 NORMAL_DIST = NormalDist()
-DEFAULT_BAND_QUANTILES = [
+
+
+class BandQuantile(TypedDict):
+    level: int
+    label: str
+    lower_q: float
+    upper_q: float
+
+
+DEFAULT_BAND_QUANTILES: tuple[BandQuantile, ...] = (
     {"level": 1, "label": "1sigma proxy", "lower_q": 0.16, "upper_q": 0.84},
     {"level": 2, "label": "2sigma proxy", "lower_q": 0.10, "upper_q": 0.90},
     {"level": 3, "label": "3sigma proxy", "lower_q": 0.05, "upper_q": 0.95},
     {"level": 4, "label": "4sigma proxy", "lower_q": 0.025, "upper_q": 0.975},
     {"level": 5, "label": "5sigma proxy", "lower_q": 0.01, "upper_q": 0.99},
     {"level": 6, "label": "6sigma proxy", "lower_q": 0.005, "upper_q": 0.995},
-]
+)
 FALLBACK_SAMPLE_PROBS = [0.005, 0.01, 0.025, 0.05, 0.10, 0.16, 0.25, 0.50, 0.75, 0.84, 0.90, 0.95, 0.975, 0.99, 0.995]
 IV_TRIM_LOWER_Q = 0.10
 IV_TRIM_UPPER_Q = 0.90
@@ -254,10 +263,10 @@ def _expiry_weight(expiry_slice: dict[str, Any]) -> float:
     liquidity = clamp(_safe_float(expiry_slice.get("avg_liquidity_weight"), 0.0), 0.05, 1.0)
     oi_total = max(_safe_float(expiry_slice.get("oi_total"), 0.0), 0.0)
     gamma_total = max(abs(_safe_float(expiry_slice.get("gamma_total"), 0.0)), 0.0)
-    oi_power = Config.OPTIONS_MODEL_RANGE_PROJECTION_EXPIRY_WEIGHT_OI_POWER
-    gamma_power = Config.OPTIONS_MODEL_RANGE_PROJECTION_EXPIRY_WEIGHT_GAMMA_POWER
-    kappa = Config.OPTIONS_MODEL_RANGE_PROJECTION_EXPIRY_DECAY_KAPPA
-    return liquidity * ((oi_total + 1.0) ** oi_power) * ((gamma_total + 1.0) ** gamma_power) * math.exp(-kappa * time_years)
+    oi_power = float(Config.OPTIONS_MODEL_RANGE_PROJECTION_EXPIRY_WEIGHT_OI_POWER)
+    gamma_power = float(Config.OPTIONS_MODEL_RANGE_PROJECTION_EXPIRY_WEIGHT_GAMMA_POWER)
+    kappa = float(Config.OPTIONS_MODEL_RANGE_PROJECTION_EXPIRY_DECAY_KAPPA)
+    return float(liquidity * ((oi_total + 1.0) ** oi_power) * ((gamma_total + 1.0) ** gamma_power) * math.exp(-kappa * time_years))
 
 
 def _tactical_horizon_scale(days_to_expiry_business: float, target_horizon_days: float) -> float:

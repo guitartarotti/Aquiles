@@ -121,7 +121,9 @@ class MacroThermometerService:
         signature = self._build_signature(snapshot, driver_state)
         cached = self._read_cache()
         if cached and cached.get("source_signature") == signature and cached.get("data"):
-            return cached["data"]
+            cached_data = cached["data"]
+            if isinstance(cached_data, dict):
+                return cached_data
 
         contracts = (((snapshot.get("market") or {}).get("contracts")) or {})
         overview = self.overview_service.get_overview(participant_limit=8, news_limit=8)
@@ -215,7 +217,8 @@ class MacroThermometerService:
             return {}
         try:
             with open(self.cache_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                payload = json.load(f)
+            return payload if isinstance(payload, dict) else {}
         except Exception:
             logger.exception("Failed to load thermometer cache")
             return {}
@@ -339,11 +342,11 @@ class MacroThermometerService:
                 result[bucket] += base * headline_sign
         elif driver:
             for asset in (driver.get("asset_asymmetry") or []):
-                bucket = self._asset_bucket(asset.get("asset"))
-                if not bucket:
+                asset_bucket = self._asset_bucket(asset.get("asset"))
+                if not asset_bucket:
                     continue
                 bucket_delta = base * self._asset_direction_sign(asset.get("asset"), asset.get("bias"))
-                result[bucket] += bucket_delta
+                result[asset_bucket] += bucket_delta
 
         if result["credit"] == 0 and result["equity"] == 0 and result["fx"] == 0:
             if scope == "macro":
@@ -475,7 +478,7 @@ class MacroThermometerService:
         if not targeted_buckets or not compatible_delta:
             return None
 
-        return payload
+        return payload if isinstance(payload, dict) else None
 
     def _should_include_event(self, event: Dict[str, Any], driver: Optional[Dict[str, Any]]) -> bool:
         scope = str(event.get("macro_scope") or "none")
@@ -504,9 +507,7 @@ class MacroThermometerService:
             return True
         if expected_impact >= 18 or driver_importance >= 20:
             return True
-        if market_relevance and signal_strength == "high" and impact_score >= 2:
-            return True
-        return False
+        return bool(market_relevance and signal_strength == "high" and impact_score >= 2)
 
     def _build_entity_views(
         self,
@@ -716,7 +717,7 @@ class MacroThermometerService:
         trading_plan: Dict[str, Any],
     ) -> Dict[str, Any]:
         action_bias = self._bias_from_score(latest_scores.get("general", 0.0))
-        top_groups = ", ".join(item.get("label") for item in entity_views[:3]) or "macro desks"
+        top_groups = ", ".join(str(item.get("label")) for item in entity_views[:3]) or "macro desks"
         return {
             "implicit_sentiment": (overview.get("overall") or {}).get("implicit_sentiment") or self._risk_label(latest_scores.get("general", 0.0)),
             "market_commentary": (
@@ -766,7 +767,11 @@ class MacroThermometerService:
     ) -> Optional[str]:
         if not driver:
             return None
-        candidates = [item.get("asset") for item in driver.get("asset_asymmetry") or [] if item.get("asset") in contracts]
+        candidates = [
+            str(item.get("asset"))
+            for item in driver.get("asset_asymmetry") or []
+            if item.get("asset") in contracts
+        ]
         if candidates:
             return candidates[0]
         for bucket, _weight in sorted(group.bucket_weights.items(), key=lambda item: item[1], reverse=True):
@@ -789,7 +794,7 @@ class MacroThermometerService:
         for driver in drivers:
             for asset in driver.get("focus_contracts") or []:
                 if asset in preferred.get(bucket, ()) and asset in contracts:
-                    return asset
+                    return str(asset)
         for asset in preferred.get(bucket, ()):
             if asset in contracts:
                 return asset
@@ -815,10 +820,7 @@ class MacroThermometerService:
         for asset in focus_contracts:
             if self._asset_bucket(asset) == bucket:
                 return True
-        for asset in asset_asymmetry:
-            if self._asset_bucket(asset.get("asset")) == bucket:
-                return True
-        return False
+        return any(self._asset_bucket(asset.get("asset")) == bucket for asset in asset_asymmetry)
 
     def _asset_bucket(self, asset: Optional[str]) -> Optional[str]:
         value = str(asset or "").upper()

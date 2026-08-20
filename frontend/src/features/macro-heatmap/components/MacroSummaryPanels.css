@@ -1,0 +1,61 @@
+.pressure-head,
+.pressure-pill-row,
+.pressure-window-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.pressure-head {
+  justify-content: space-between;
+}
+
+.pressure-title,
+.pressure-pill-label,
+.pressure-window-label {
+  color: #9db4c9;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.pressure-meta,
+.pressure-window-row {
+  color: #dbe4ee;
+  font-size: 12px;
+}
+
+.pressure-pill-row,
+.pressure-window-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.pressure-pill-row {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.pressure-pill {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pressure-pill.buy {
+  border-color: rgba(79, 195, 247, 0.4);
+  background: rgba(79, 195, 247, 0.08);
+}
+
+.pressure-pill.sell {
+  border-color: rgba(255, 112, 67, 0.4);
+  background: rgba(255, 112, 67, 0.08);
+}
+
+.pressure-micro {
+  color: #c7d3df;
+  font-size: 11px;
+}

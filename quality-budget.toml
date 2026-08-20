@@ -1,0 +1,130 @@
+[file_size]
+legacy_reason = "Existing oversized modules must not grow and remain scheduled for decomposition."
+
+[[file_size.rules]]
+root = "backend/app"
+extensions = [".py"]
+max_lines = 800
+exclude_parts = ["__pycache__"]
+
+[[file_size.rules]]
+root = "frontend/src"
+extensions = [".js", ".ts", ".vue"]
+max_lines = 500
+exclude_parts = ["vendor"]
+
+[file_size.legacy]
+"backend/app/api/macro.py" = 1281
+"backend/app/api/report.py" = 934
+"backend/app/config.py" = 1317
+"backend/app/domains/funds_flow/infrastructure/b3_source.py" = 1613
+"backend/app/services/cvm_cda_graph_service.py" = 3748
+"backend/app/services/cvm_cda_service.py" = 3075
+"backend/app/services/etf_daily_flow_service.py" = 3237
+"backend/app/services/fair_value_legs_chart_service.py" = 1521
+"backend/app/services/fair_value_legs_model.py" = 2041
+"backend/app/services/fair_value_markov_model.py" = 2673
+"backend/app/services/fair_value_markov_regime_service.py" = 1183
+"backend/app/services/fair_value_markov_regime_store.py" = 840
+"backend/app/services/flow_activity_radar_service.py" = 1624
+"backend/app/services/funds_flow_analytics.py" = 1132
+"backend/app/services/funds_flow_cftc.py" = 1053
+"backend/app/services/macro_cross_asset_service.py" = 1785
+"backend/app/services/macro_curve_discovery_service.py" = 1308
+"backend/app/services/macro_driver_service.py" = 2519
+"backend/app/services/macro_live_service.py" = 3262
+"backend/app/services/macro_options_heatmap_context_service.py" = 2959
+"backend/app/services/macro_participant_analytics.py" = 3673
+"backend/app/services/macro_participant_heatmap_service.py" = 1002
+"backend/app/services/macro_persona_service.py" = 824
+"backend/app/services/macro_thermometer_service.py" = 1010
+"backend/app/services/market_screen_capture_service.py" = 1704
+"backend/app/services/market_screen_chart_service.py" = 1322
+"backend/app/services/market_screen_history_store.py" = 1422
+"backend/app/services/nport_service.py" = 2102
+"backend/app/services/oasis_profile_generator.py" = 1197
+"backend/app/services/oplab_options_service.py" = 1404
+"backend/app/services/options_fair_value_modeling/factor_preparation.py" = 1005
+"backend/app/services/options_fair_value_modeling/fair_value_quality_model.py" = 1319
+"backend/app/services/options_fair_value_modeling/intraday_correlation_history_service.py" = 1248
+"backend/app/services/options_fair_value_modeling/intraday_neural_model_service.py" = 855
+"backend/app/services/options_fair_value_modeling/service.py" = 849
+"backend/app/services/options_modeling/range_projection.py" = 817
+"backend/app/services/options_store.py" = 1935
+"backend/app/services/report_agent.py" = 2567
+"backend/app/services/report_source_discovery_service.py" = 952
+"backend/app/services/simulation_config_generator.py" = 1083
+"backend/app/services/simulation_runner.py" = 1764
+"backend/app/services/zep_tools.py" = 1795
+"frontend/src/api/macro.js" = 688
+"frontend/src/api/options.js" = 512
+"frontend/src/components/GraphPanel.vue" = 1575
+"frontend/src/components/HistoryDatabase.vue" = 1341
+"frontend/src/components/MacroParticipantHeatmapPanel.vue" = 1011
+"frontend/src/components/Step1GraphBuild.vue" = 2006
+"frontend/src/components/Step2EnvSetup.vue" = 2588
+"frontend/src/components/Step3Simulation.vue" = 1240
+"frontend/src/components/Step4Report.vue" = 852
+"frontend/src/components/Step5Interaction.vue" = 2577
+"frontend/src/components/discovery/widgets/AtemporalPriceChartWidget.vue" = 1357
+"frontend/src/components/discovery/widgets/CurveDiscoveryWidget.vue" = 1116
+"frontend/src/components/discovery/widgets/DealerPainMapWidget.vue" = 3562
+"frontend/src/components/discovery/widgets/DexNeutralWidget.vue" = 1287
+"frontend/src/components/discovery/widgets/FairValueLegsWidget.vue" = 1156
+"frontend/src/components/discovery/widgets/FairValueMarkovRegimeWidget.vue" = 2285
+"frontend/src/components/discovery/widgets/FlowActivityRadarWidget.vue" = 1282
+"frontend/src/components/discovery/widgets/HeadlinesWidget.vue" = 597
+"frontend/src/components/discovery/widgets/HedgePressureWidget.vue" = 688
+"frontend/src/components/discovery/widgets/IntradayGammaWidget.vue" = 1077
+"frontend/src/components/discovery/widgets/IvSmileWidget.vue" = 593
+"frontend/src/components/discovery/widgets/MarketMakerHedgeWidget.vue" = 1844
+"frontend/src/components/discovery/widgets/OptionFlowWidget.vue" = 541
+"frontend/src/components/discovery/widgets/OptionRegimeClassifierWidget.vue" = 2744
+"frontend/src/components/discovery/widgets/PcrWidget.vue" = 940
+"frontend/src/components/discovery/widgets/PinningExpansionBattleWidget.vue" = 1757
+"frontend/src/components/discovery/widgets/ReportSourceDiscoveryWidget.vue" = 755
+"frontend/src/components/discovery/widgets/VolatilityIgnitionDetectorWidget.vue" = 3332
+"frontend/src/components/discovery/widgets/VolIndexWidget.vue" = 1006
+"frontend/src/components/discovery/widgets/VolOfVolWidget.vue" = 1515
+"frontend/src/components/discovery/widgets/VolSurface3DWidget.vue" = 628
+"frontend/src/components/discovery/widgets/VolSurfaceDistortionRadarWidget.vue" = 1552
+"frontend/src/components/reportToolDisplays.js" = 2081
+"frontend/src/composables/useMacroTrendBoard.js" = 1367
+"frontend/src/features/funds-flow/components/EtfDailyFlowPanel.vue" = 766
+"frontend/src/features/funds-flow/components/FundsFlowLocalWidget.vue" = 6644
+"frontend/src/features/funds-flow/models/cdaGraphOverlay.js" = 822
+"frontend/src/features/macro-heatmap/components/MacroHeatmapView.vue" = 6690
+"frontend/src/features/macro-heatmap/models/heatmapModels.js" = 2550
+"frontend/src/views/ChartView.vue" = 1307
+"frontend/src/views/DiscoveryView.vue" = 1971
+"frontend/src/views/Home.vue" = 1539
+"frontend/src/views/MainView.vue" = 693
+"frontend/src/views/OptionsDashboardView.vue" = 1850
+"frontend/src/views/Process.vue" = 2069
+
+[suppressions]
+type_ignore_max = 18
+noqa_max = 23
+eslint_disable_max = 0
+
+[obsolete_compatibility]
+paths = [
+    "backend/app/api/funds_flow_local.py",
+    "backend/app/api/options.py",
+    "backend/app/api/simulation.py",
+    "backend/app/services/funds_flow_contracts.py",
+    "backend/app/domains/funds_flow/infrastructure/source_adapters.py",
+]
+
+[dependencies]
+ignored_backend_prefixes = ["app.api"]
+backend_cycle_signatures = [
+    "app.services.macro_driver_service|app.services.macro_live_service",
+    "app.services.macro_options_heatmap_context_service|app.services.options_fair_value_modeling.intraday_correlation_history_service|app.services.options_fair_value_modeling.intraday_dependency_service|app.services.options_fair_value_modeling.intraday_neural_model_service",
+]
+
+[coverage.ci_steps]
+"Test backend" = 31
+"Enforce authentication coverage" = 90
+"Enforce Funds Flow critical coverage" = 60
+"Enforce pure financial calculations coverage" = 80

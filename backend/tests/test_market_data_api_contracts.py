@@ -6,7 +6,8 @@ import pytest
 from flask import Flask
 
 from app.api import cvm_cda as cvm_api
-from app.api import funds_flow_local as funds_api
+from app.container import AquilesContainer, attach_container
+from app.domains.funds_flow.api import routes as funds_api
 
 
 class RecordingService:
@@ -43,7 +44,7 @@ class RecordingManager:
 
 
 @pytest.fixture()
-def market_api(monkeypatch):
+def market_api():
     application = Flask(__name__)
     application.config.update(TESTING=True)
 
@@ -52,18 +53,12 @@ def market_api(monkeypatch):
     cvm_service = RecordingService()
     cvm_manager = RecordingManager()
 
-    monkeypatch.setattr(funds_api, "funds_flow_local_service", funds_service)
-    monkeypatch.setattr(
-        funds_api.FundsFlowLocalManager,
-        "get_instance",
-        classmethod(lambda _cls: funds_manager),
-    )
-    monkeypatch.setattr(cvm_api, "cvm_cda_service", cvm_service)
-    monkeypatch.setattr(
-        cvm_api.CvmCdaManager,
-        "get_instance",
-        classmethod(lambda _cls: cvm_manager),
-    )
+    dependencies = AquilesContainer()
+    dependencies.override("funds_flow_service", funds_service)
+    dependencies.override("funds_flow_manager", funds_manager)
+    dependencies.override("cvm_cda_service", cvm_service)
+    dependencies.override("cvm_cda_manager", cvm_manager)
+    attach_container(application, dependencies)
 
     application.register_blueprint(
         funds_api.funds_flow_local_bp,
@@ -128,6 +123,25 @@ def test_funds_flow_routes_preserve_parameters_and_collector_contract(market_api
     assert client.post("/api/v1/funds-flow-local/collector/stop").get_json()["method"] == "stop"
 
 
+def test_funds_flow_routes_reject_invalid_contracts(market_api) -> None:
+    application, service, manager, _, _ = market_api
+    client = application.test_client()
+
+    response = client.get(
+        "/api/v1/funds-flow-local/dashboard",
+        query_string={"date": "invalid", "history_days": 10},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "Invalid Funds Flow request",
+        "invalid_fields": ["date", "history_days"],
+        "success": False,
+    }
+    assert service.calls == []
+    assert manager.calls == []
+
+
 def test_cvm_cda_read_routes_preserve_query_contract(market_api) -> None:
     application, _, _, service, _ = market_api
     client = application.test_client()
@@ -135,10 +149,19 @@ def test_cvm_cda_read_routes_preserve_query_contract(market_api) -> None:
     assert client.get("/api/v1/cvm-cda/dashboard?month=202607").status_code == 200
     assert service.calls[-1] == ("get_dashboard", {"month": "202607"})
 
-    assert client.get(
-        "/api/v1/cvm-cda/analytics/funds",
-        query_string={"month": "202607", "target": "local", "side": "short", "page": 2, "per_page": 10},
-    ).status_code == 200
+    assert (
+        client.get(
+            "/api/v1/cvm-cda/analytics/funds",
+            query_string={
+                "month": "202607",
+                "target": "local",
+                "side": "short",
+                "page": 2,
+                "per_page": 10,
+            },
+        ).status_code
+        == 200
+    )
     assert service.calls[-1] == (
         "list_funds",
         {"month": "202607", "target": "local", "side": "short", "page": 2, "per_page": 10},

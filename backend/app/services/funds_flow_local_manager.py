@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import threading
 from datetime import date, datetime, timedelta, timezone
@@ -10,7 +9,9 @@ from datetime import time as dt_time
 from typing import Any
 
 from ..config import Config
-from ..utils.atomic_io import atomic_json_dump
+from ..domains.funds_flow.application.repositories import FundsFlowCollectorStateRepository
+from ..domains.funds_flow.contracts import FundFlowCollectorState
+from ..domains.funds_flow.infrastructure import JsonFundsFlowCollectorStateRepository
 from ..utils.logger import get_logger
 from .funds_flow_local_service import FundsFlowLocalService
 from .funds_flow_utils import LOCAL_TZ, _clean_json, _local_now, _now_iso, _parse_iso
@@ -24,10 +25,17 @@ class FundsFlowLocalManager:
     _instance: "FundsFlowLocalManager | None" = None
     _instance_lock = threading.Lock()
 
-    def __init__(self) -> None:
-        self.service = FundsFlowLocalService()
+    def __init__(
+        self,
+        service: FundsFlowLocalService | None = None,
+        state_repository: FundsFlowCollectorStateRepository | None = None,
+    ) -> None:
+        self.service = service or FundsFlowLocalService()
         self.root_dir = self.service.root_dir
         self.state_path = os.path.join(self.root_dir, "collector_status.json")
+        self.state_repository = state_repository or JsonFundsFlowCollectorStateRepository(
+            self.state_path
+        )
         self._runtime_lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -47,7 +55,9 @@ class FundsFlowLocalManager:
                 self._save_status(desired_running=True, running=True)
                 return self.status()
             self._stop_event = threading.Event()
-            self._thread = threading.Thread(target=self._run_loop, daemon=True, name="funds-flow-local-daily")
+            self._thread = threading.Thread(
+                target=self._run_loop, daemon=True, name="funds-flow-local-daily"
+            )
             self._thread.start()
             self._save_status(
                 desired_running=True,
@@ -168,21 +178,24 @@ class FundsFlowLocalManager:
         raw = str(getattr(Config, "FUNDS_FLOW_LOCAL_UPDATE_TIME", "07:40") or "07:40")
         try:
             hour_text, minute_text = raw.split(":", 1)
-            return dt_time(hour=max(0, min(int(hour_text), 23)), minute=max(0, min(int(minute_text[:2]), 59)))
+            return dt_time(
+                hour=max(0, min(int(hour_text), 23)), minute=max(0, min(int(minute_text[:2]), 59))
+            )
         except Exception:
             return dt_time(hour=7, minute=40)
 
     def _latest_snapshot_at(self) -> datetime | None:
-        snapshot = self.service._read_latest()
+        snapshot = self.service.read_latest_snapshot()
         report = (snapshot or {}).get("report") or {}
-        return _parse_iso(report.get("last_updated_at") or (snapshot or {}).get("generated_at")) if snapshot else None
+        return (
+            _parse_iso(report.get("last_updated_at") or (snapshot or {}).get("generated_at"))
+            if snapshot
+            else None
+        )
 
     def _read_status(self) -> dict[str, Any]:
         try:
-            with open(self.state_path, "r", encoding="utf-8") as handle:
-                state = json.load(handle)
-        except FileNotFoundError:
-            state = {}
+            state = self.state_repository.load().model_dump(mode="json")
         except Exception:
             logger.exception("Failed to read Funds Flow Local collector status")
             state = {}
@@ -203,4 +216,4 @@ class FundsFlowLocalManager:
         for key, value in fields.items():
             if value is not None or key in {"last_error", "stopped_reason"}:
                 state[key] = value
-        atomic_json_dump(self.state_path, _clean_json(state), indent=2)
+        self.state_repository.save(FundFlowCollectorState.model_validate(_clean_json(state)))

@@ -251,7 +251,7 @@ def prepare_global_inputs(
     for config in asset_configs:
         selected_security, quote = _choose_live_security(config, quote_rows)
         selected_row = quote or {}
-        bars_response = {"rows": [], "status": {"session_ok": False}}
+        bars_response: dict[str, Any] = {"rows": [], "status": {"session_ok": False}}
         if selected_security:
             try:
                 bars_response = bloomberg_service.fetch_intraday_bars(

@@ -5,7 +5,7 @@ import math
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -22,8 +22,8 @@ try:
     import torch
     from torch import nn
 except Exception:  # pragma: no cover - handled at runtime
-    torch = None
-    nn = None
+    torch = cast(Any, None)
+    nn = cast(Any, None)
 
 
 logger = get_logger("aquiles.options_fair_value.intraday_correlation_history")
@@ -82,7 +82,7 @@ class _SingleFactorNeuralRegressor(nn.Module):
         )
         self.bias = nn.Parameter(torch.zeros(1))
 
-    def forward(self, factor_inputs, context_inputs, *, return_parts: bool = False):
+    def forward(self, factor_inputs: Any, context_inputs: Any, *, return_parts: bool = False) -> Any:
         linear_term = self.linear(factor_inputs)
         nonlinear_term = self.factor_net(factor_inputs)
         context_term = self.context_net(context_inputs)
@@ -607,7 +607,10 @@ class IntradayCorrelationHistoryService:
         grad_context_tensor = torch.tensor(x_context, dtype=torch.float32, device=device)
         grad_pred = model(grad_factor_tensor, grad_context_tensor)
         grad_pred.sum().backward()
-        sensitivities = grad_factor_tensor.grad.detach().cpu().numpy()[:, 0]
+        gradient_tensor = grad_factor_tensor.grad
+        if gradient_tensor is None:
+            raise RuntimeError("Neural factor gradient was not produced")
+        sensitivities = gradient_tensor.detach().cpu().numpy()[:, 0]
 
         directional_accuracy = float(np.mean(np.sign(y) == np.sign(prediction))) if len(y) else 0.0
         rmse = float(np.sqrt(np.mean(np.square(y - prediction)))) if len(y) else 0.0
@@ -715,7 +718,7 @@ class IntradayCorrelationHistoryService:
         merged = copy.deepcopy(pure_payload)
         if neural_payload and str(neural_payload.get("session_date") or "").strip() != str(pure_payload.get("session_date") or "").strip():
             neural_payload = {}
-        neural_projected = (
+        neural_projected: dict[str, Any] = (
             cls._project_payload_modes(neural_payload, ["neural"])
             if neural_payload
             else {"series": [], "training": {"neural": {}}}
@@ -726,24 +729,32 @@ class IntradayCorrelationHistoryService:
             if str(value or "").strip()
         }
         pure_series = [
-            dict(item or {})
+            dict(item)
             for item in (merged.get("series") or [])
-            if str((item or {}).get("mode") or "").strip().lower() == "pure"
+            if isinstance(item, dict) and str(item.get("mode") or "").strip().lower() == "pure"
         ]
         neural_series = [
-            dict(item or {})
+            dict(item)
             for item in (neural_projected.get("series") or [])
-            if not selected_factors or str((item or {}).get("factor") or "").strip() in selected_factors
+            if isinstance(item, dict)
+            and (not selected_factors or str(item.get("factor") or "").strip() in selected_factors)
         ]
         merged["series"] = pure_series + (neural_series if "neural" in requested_modes else [])
-        neural_training = ((neural_projected.get("training") or {}).get("neural") or {}) if "neural" in requested_modes else {}
+        training_payload = neural_projected.get("training")
+        raw_neural_training = training_payload.get("neural") if isinstance(training_payload, dict) else None
+        neural_training: dict[str, Any] = (
+            dict(raw_neural_training)
+            if "neural" in requested_modes and isinstance(raw_neural_training, dict)
+            else {}
+        )
         merged["training"] = {"neural": neural_training}
 
         latest_neural_by_factor: dict[str, tuple[float | None, str]] = {}
         for factor, summary in neural_training.items():
+            summary_payload = summary if isinstance(summary, dict) else {}
             latest_neural_by_factor[str(factor or "").strip()] = (
-                _safe_float((summary or {}).get("latest_value")),
-                str((summary or {}).get("status") or ""),
+                _safe_float(summary_payload.get("latest_value")),
+                str(summary_payload.get("status") or ""),
             )
 
         updated_available = []

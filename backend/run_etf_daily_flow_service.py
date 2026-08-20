@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import Any
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -34,8 +35,7 @@ from app.utils.logger import get_logger
 logger = get_logger("aquiles.etf_daily_flow_service")
 
 app = Flask(__name__)
-if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
-    app.json.ensure_ascii = False
+setattr(app.json, "ensure_ascii", False)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 register_auth(app)
 register_error_handlers(app)
@@ -44,7 +44,7 @@ etf_flow_service = EtfDailyFlowService()
 etf_flow_manager = EtfDailyFlowManager(etf_flow_service)
 
 
-def _json_error(exc: Exception, status_code: int = 500):
+def _json_error(exc: Exception, status_code: int = 500) -> Any:
     return error_response(
         logger,
         status_code=status_code,
@@ -71,7 +71,7 @@ def _int_arg(name: str, default: int) -> int:
 
 
 @app.route("/health", methods=["GET"])
-def health():
+def health() -> Any:
     try:
         data = etf_flow_service.health(manager_status=etf_flow_manager.status())
         return jsonify(
@@ -87,7 +87,7 @@ def health():
 
 @app.route("/api/etf-daily-flow/status", methods=["GET"])
 @app.route("/api/v1/etf-daily-flow/status", methods=["GET"])
-def status():
+def status() -> Any:
     try:
         return jsonify(etf_flow_service.health(manager_status=etf_flow_manager.status()))
     except Exception as exc:
@@ -96,7 +96,7 @@ def status():
 
 @app.route("/api/etf-daily-flow/universe", methods=["GET", "POST"])
 @app.route("/api/v1/etf-daily-flow/universe", methods=["GET", "POST"])
-def universe():
+def universe() -> Any:
     try:
         if request.method == "GET":
             active = request.args.get("active")
@@ -119,7 +119,7 @@ def universe():
 
 @app.route("/api/etf-daily-flow/collect", methods=["POST"])
 @app.route("/api/v1/etf-daily-flow/collect", methods=["POST"])
-def collect():
+def collect() -> Any:
     try:
         payload = request.get_json(silent=True) or {}
         tickers = payload.get("tickers")
@@ -141,11 +141,14 @@ def collect():
 
 @app.route("/api/etf-daily-flow/discover", methods=["POST"])
 @app.route("/api/v1/etf-daily-flow/discover", methods=["POST"])
-def discover():
+def discover() -> Any:
     try:
         payload = request.get_json(silent=True) or {}
+        provider = str(payload.get("provider") or request.args.get("provider") or "").strip()
+        if not provider:
+            return jsonify({"ok": False, "error": "provider is required"}), 400
         result = etf_flow_service.discover_provider(
-            provider=payload.get("provider") or request.args.get("provider"),
+            provider=provider,
             source_url=payload.get("source_url") or request.args.get("source_url"),
             seed_universe=_bool_arg("seed_universe", True),
             reset_provider=_bool_arg("reset_provider", False),
@@ -158,7 +161,7 @@ def discover():
 
 @app.route("/api/etf-daily-flow/observations", methods=["GET"])
 @app.route("/api/v1/etf-daily-flow/observations", methods=["GET"])
-def observations():
+def observations() -> Any:
     try:
         return jsonify(
             etf_flow_service.list_observations(
@@ -173,7 +176,7 @@ def observations():
 
 @app.route("/api/etf-daily-flow/flows", methods=["GET"])
 @app.route("/api/v1/etf-daily-flow/flows", methods=["GET"])
-def flows():
+def flows() -> Any:
     try:
         return jsonify(
             etf_flow_service.list_flows(
@@ -188,7 +191,7 @@ def flows():
 
 @app.route("/api/etf-daily-flow/dashboard", methods=["GET"])
 @app.route("/api/v1/etf-daily-flow/dashboard", methods=["GET"])
-def dashboard():
+def dashboard() -> Any:
     try:
         return jsonify(etf_flow_service.dashboard(top_n=_int_arg("top_n", 20)))
     except Exception as exc:
@@ -197,7 +200,7 @@ def dashboard():
 
 @app.route("/api/etf-daily-flow/runs", methods=["GET"])
 @app.route("/api/v1/etf-daily-flow/runs", methods=["GET"])
-def runs():
+def runs() -> Any:
     try:
         return jsonify(etf_flow_service.list_runs(limit=_int_arg("limit", 20)))
     except Exception as exc:
@@ -206,7 +209,7 @@ def runs():
 
 @app.route("/api/etf-daily-flow/errors", methods=["GET"])
 @app.route("/api/v1/etf-daily-flow/errors", methods=["GET"])
-def errors():
+def errors() -> Any:
     try:
         return jsonify(etf_flow_service.list_errors(limit=_int_arg("limit", 50)))
     except Exception as exc:
@@ -216,7 +219,7 @@ def errors():
 @app.route("/api/etf-daily-flow/collector/start", methods=["POST"])
 @app.route("/api/v1/etf-daily-flow/collector/start", methods=["POST"])
 @require_role("admin")
-def collector_start():
+def collector_start() -> Any:
     try:
         return jsonify(etf_flow_manager.start())
     except Exception as exc:
@@ -226,7 +229,7 @@ def collector_start():
 @app.route("/api/etf-daily-flow/collector/stop", methods=["POST"])
 @app.route("/api/v1/etf-daily-flow/collector/stop", methods=["POST"])
 @require_role("admin")
-def collector_stop():
+def collector_stop() -> Any:
     try:
         return jsonify(etf_flow_manager.stop())
     except Exception as exc:

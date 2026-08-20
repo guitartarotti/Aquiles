@@ -6,39 +6,23 @@ import os
 import time
 import uuid
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from flask import Flask, g, request
 from flask_cors import CORS
+
+if TYPE_CHECKING:
+    from .container import AquilesContainer
 
 # Some optional ML dependencies create noisy resource-tracker warnings on shutdown.
 warnings.filterwarnings("ignore", message=".*resource_tracker.*")
 
 
 def _register_blueprints(app: Flask) -> None:
-    from .api import (
-        cvm_cda_bp,
-        funds_flow_local_bp,
-        graph_bp,
-        macro_bp,
-        nport_bp,
-        options_bp,
-        report_bp,
-        simulation_bp,
-    )
+    from . import api as _route_implementations  # noqa: F401
+    from .domains.catalog import register_domain_blueprints
 
-    blueprints = (
-        (graph_bp, "/api/graph"),
-        (simulation_bp, "/api/simulation"),
-        (report_bp, "/api/report"),
-        (macro_bp, "/api/macro"),
-        (options_bp, "/api/options"),
-        (funds_flow_local_bp, "/api/v1/funds-flow-local"),
-        (nport_bp, "/api/v1/nport"),
-        (cvm_cda_bp, "/api/v1/cvm-cda"),
-    )
-    for blueprint, prefix in blueprints:
-        app.register_blueprint(blueprint, url_prefix=prefix)
+    register_domain_blueprints(app)
 
 
 def _configure_request_observability(app: Flask) -> None:
@@ -73,18 +57,23 @@ def _configure_request_observability(app: Flask) -> None:
         return response
 
 
-def create_app(config_class: type | None = None) -> Flask:
+def create_app(
+    config_class: type | None = None,
+    *,
+    dependencies: AquilesContainer | None = None,
+) -> Flask:
     """Create and configure an Aquiles backend application instance."""
-    from .auth import register_auth
     from .config import Config
+    from .container import AquilesContainer, attach_container
+    from .domains.auth import register_auth_routes
     from .http import register_error_handlers
     from .services.simulation_runner import SimulationRunner
-    from .startup import start_background_services
     from .utils.logger import setup_logger
 
     app = Flask(__name__)
     app.config.from_object(config_class or Config)
     app.json.ensure_ascii = False
+    attach_container(app, dependencies or AquilesContainer())
 
     logger = setup_logger("aquiles")
     should_log_startup = not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true"
@@ -98,11 +87,10 @@ def create_app(config_class: type | None = None) -> Flask:
     )
     _configure_request_observability(app)
     _register_blueprints(app)
-    register_auth(app, expose_login=True)
+    register_auth_routes(app, expose_login=True)
     register_error_handlers(app)
 
     SimulationRunner.register_cleanup()
-    start_background_services(app, logger, should_log_startup)
 
     @app.get("/health")
     def health() -> dict[str, str]:

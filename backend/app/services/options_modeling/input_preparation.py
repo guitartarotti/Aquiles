@@ -37,7 +37,7 @@ def _choose_iv(row: dict[str, Any]) -> float:
             value = (bid + ask) / 2.0
         else:
             value = _pick_first(bid, ask, 0.20)
-    return normalize_vol(value)
+    return normalize_vol(value if value is not None else 0.20)
 
 
 def _choose_open_interest(row: dict[str, Any], latest_oi_row: dict[str, Any] | None) -> float:
@@ -193,10 +193,16 @@ def prepare_option_inputs(
                 distance_to_atm_ratio=float(distance_ratio),
                 moneyness_bucket=_moneyness_bucket(distance_ratio),
                 expiry_bucket=_expiry_bucket(days_business),
-                liquidity_score=float(_pick_first(row.get("liquidity_score"), row.get("liquidity_score_initial"), 0.0)),
+                liquidity_score=float(
+                    _pick_first(row.get("liquidity_score"), row.get("liquidity_score_initial"), 0.0)
+                    or 0.0
+                ),
                 liquidity_weight=_liquidity_weight(row),
                 reliability_weight=_reliability_weight(row, selected_iv, observed_delta, observed_gamma),
-                option_multiplier=float(_pick_first(row.get("contract_multiplier"), run_config.option_multiplier, 1.0)),
+                option_multiplier=float(
+                    _pick_first(row.get("contract_multiplier"), run_config.option_multiplier, 1.0)
+                    or 1.0
+                ),
                 signal=float(signal_payload.get("signal", 1.0)),
                 signal_confidence=float(signal_payload.get("confidence", 0.0)),
                 signal_mode=str(signal_payload.get("mode", "neutral")),

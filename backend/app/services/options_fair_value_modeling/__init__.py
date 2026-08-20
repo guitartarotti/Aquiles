@@ -1,7 +1,9 @@
 __all__ = ["OptionsFairValueService"]
 
+from typing import Any
 
-def __getattr__(name: str):
+
+def __getattr__(name: str) -> Any:
     if name == "OptionsFairValueService":
         from .service import OptionsFairValueService
 

@@ -7,10 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.services.funds_flow_local_service import (
-    CFTC_COT_EXTRA_DATASETS,
-    FundsFlowLocalService,
-)
+from app.domains.funds_flow.contracts.source_catalog import CFTC_COT_EXTRA_DATASETS
+from app.services.funds_flow_local_service import FundsFlowLocalService
 
 
 def _service(tmp_path: Path) -> FundsFlowLocalService:
@@ -19,6 +17,7 @@ def _service(tmp_path: Path) -> FundsFlowLocalService:
 
 def test_anbima_rows_totals_and_validation_are_normalized(tmp_path: Path) -> None:
     service = _service(tmp_path)
+    source = service.anbima_source
     frame = pd.DataFrame(
         [
             ["Data de Referencia: 17/08/2026"],
@@ -28,13 +27,13 @@ def test_anbima_rows_totals_and_validation_are_normalized(tmp_path: Path) -> Non
         ]
     )
 
-    rows = service._parse_anbima_consolidated_rows(
+    rows = source._parse_anbima_consolidated_rows(
         frame,
         kind="category",
         first_block_only=False,
     )
-    total = service._find_anbima_total(frame)
-    validation = service._build_anbima_validation(
+    total = source._find_anbima_total(frame)
+    validation = source.build_validation(
         pd.DataFrame(
             [
                 {
@@ -59,14 +58,18 @@ def test_anbima_rows_totals_and_validation_are_normalized(tmp_path: Path) -> Non
     assert total["net_flow_month_brl"] == 4_000_000
     assert validation["status"] == "available"
     assert validation["rows"][0]["aum_diff_brl"] == 10_000_000
-    assert service._extract_anbima_date(frame, "Data de Referencia") == date(2026, 8, 17)
-    assert service._extract_anbima_period_label(pd.DataFrame([["Agosto/2026"]])) == "Agosto/2026"
-    assert service._find_anbima_sheet(["Resumo", "Tipo ANBIMA"], required_tokens=["TIPO ANBIMA"]) == "Tipo ANBIMA"
-    assert service._html_to_text("Fluxo<br>liquido") == "Fluxo liquido"
+    assert source._extract_anbima_date(frame, "Data de Referencia") == date(2026, 8, 17)
+    assert source._extract_anbima_period_label(pd.DataFrame([["Agosto/2026"]])) == "Agosto/2026"
+    assert (
+        source._find_anbima_sheet(["Resumo", "Tipo ANBIMA"], required_tokens=["TIPO ANBIMA"])
+        == "Tipo ANBIMA"
+    )
+    assert source._html_to_text("Fluxo<br>liquido") == "Fluxo liquido"
 
 
 def test_ici_weekly_worldwide_and_html_parsers(tmp_path: Path, monkeypatch) -> None:
     service = _service(tmp_path)
+    source = service.ici_source
     weekly = pd.DataFrame(
         [
             ["Actual monthly"],
@@ -77,7 +80,7 @@ def test_ici_weekly_worldwide_and_html_parsers(tmp_path: Path, monkeypatch) -> N
     )
     monkeypatch.setattr(pd, "read_excel", lambda *_args, **_kwargs: weekly)
 
-    records = service._parse_ici_weekly_file(
+    records = source._parse_ici_weekly_file(
         "ici_etf.xls",
         vehicle="etf",
         source_url="https://example.test/ici.xls",
@@ -85,25 +88,37 @@ def test_ici_weekly_worldwide_and_html_parsers(tmp_path: Path, monkeypatch) -> N
 
     assert {row["frequency"] for row in records} == {"M", "W"}
     assert any(row["category_key"] == "total" and row["flow_usd_mn"] == 12 for row in records)
-    assert service._ici_vehicle_label("combined") == "MF + ETF"
-    assert service._slug_key("Equity / International") == "equity_international"
-    assert service._usd_bn_to_mn("1.25") == 1_250
-    assert service._safe_ici_number("US$ 2,345.50") == 2_345.5
-    assert service._html_tables("<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>") == [
-        [["A", "B"], ["1", "2"]]
-    ]
+    assert source._ici_vehicle_label("combined") == "MF + ETF"
+    assert source._slug_key("Equity / International") == "equity_international"
+    assert source._usd_bn_to_mn("1.25") == 1_250
+    assert source._safe_ici_number("US$ 2,345.50") == 2_345.5
+    assert source._html_tables(
+        "<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>"
+    ) == [[["A", "B"], ["1", "2"]]]
 
-    worldwide = pd.DataFrame([[None] * 8 for _ in range(7)] + [["Europe1", None, 100, 40], [None, "Brazil2", 20, 8]])
+    worldwide = pd.DataFrame(
+        [[None] * 8 for _ in range(7)] + [["Europe1", None, 100, 40], [None, "Brazil2", 20, 8]]
+    )
     monkeypatch.setattr(pd, "read_excel", lambda *_args, **_kwargs: worldwide)
-    rows = service._parse_ici_worldwide_sheet("worldwide.xlsx", sheet_name="Assets", prefix="assets")
-    merged = service._merge_ici_worldwide_rows(
-        [rows, [{"key": "Europe1", "level": "region", "region": "Europe", "fund_count_total_count": 5}]]
+    rows = source._parse_ici_worldwide_sheet("worldwide.xlsx", sheet_name="Assets", prefix="assets")
+    merged = source._merge_ici_worldwide_rows(
+        [
+            rows,
+            [
+                {
+                    "key": "Europe1",
+                    "level": "region",
+                    "region": "Europe",
+                    "fund_count_total_count": 5,
+                }
+            ],
+        ]
     )
 
     assert rows[0]["region"] == "Europe"
     assert rows[1]["country"] == "Brazil"
     assert merged[0]["fund_count_total_count"] == 5
-    assert service._extract_ici_worldwide_quarter("ww_q2_26_sample.xlsx") == "2026:Q2"
+    assert source._extract_ici_worldwide_quarter("ww_q2_26_sample.xlsx") == "2026:Q2"
 
 
 def _cftc_row() -> dict[str, str]:
@@ -148,7 +163,10 @@ def test_cftc_tff_normalization_and_payload_summaries(tmp_path: Path) -> None:
     assert payload["publication_date"] == "2026-08-14"
     assert payload["participant_summary"]
     assert payload["position_matrix"]
-    assert service._build_cftc_tff_payload([], errors=["offline"], latest_report_date=None)["status"] == "error"
+    assert (
+        service._build_cftc_tff_payload([], errors=["offline"], latest_report_date=None)["status"]
+        == "error"
+    )
 
 
 def test_cftc_extra_families_build_extended_views(tmp_path: Path) -> None:
@@ -185,16 +203,17 @@ def test_cftc_extra_families_build_extended_views(tmp_path: Path) -> None:
 
 def test_b3_monthly_market_report_and_numbers(tmp_path: Path) -> None:
     service = _service(tmp_path)
+    source = service.b3_source
     raw = {
         "values": [["Investidor Estrangeiro", 100, 10, 20, 2, 30, 3, 5, 0.5, 10, 1, 165, 16.5]],
         "texts": [{"textPt": "Dados do mes anterior (Julho/2026)"}],
     }
-    json_rows = service._normalize_b3_investor_participation_monthly(raw)
+    json_rows = source._normalize_b3_investor_participation_monthly(raw)
     csv_text = (
         "Tipos de investidores;A;B;C;D;E;F;G;H;I;J;K;L\n"
         "Investidores Individuais;100;10;20;2;30;3;5;0,5;10;1;165;16,5\n"
     )
-    csv_rows = service._normalize_b3_investor_participation_monthly_csv(csv_text)
+    csv_rows = source._normalize_b3_investor_participation_monthly_csv(csv_text)
 
     lines = [
         "Relatorio Ate dia 17/08/2026 - previa",
@@ -214,23 +233,37 @@ def test_b3_monthly_market_report_and_numbers(tmp_path: Path) -> None:
         "cabecalho",
         "Jul/2026;100;80;0;20",
     ]
-    market = service._parse_b3_market_data_report("\n".join(lines))
+    market = source._parse_b3_market_data_report("\n".join(lines))
 
     assert json_rows[0]["participant_type"] == "Investidor Estrangeiro"
     assert csv_rows[0]["participant_type"] == "Investidores Individuais"
-    assert service._extract_b3_monthly_period_label(raw) == "Julho/2026"
-    assert service._extract_b3_monthly_period_label_from_text("Previous month (July/2026).") == "July/2026"
+    assert source._extract_b3_monthly_period_label(raw) == "Julho/2026"
+    assert (
+        source._extract_b3_monthly_period_label_from_text("Previous month (July/2026).")
+        == "July/2026"
+    )
     assert market["summary"]["total_volume_brl_million"] == 1_090.5
     assert market["summary"]["foreign_balance_brl_million"] == 20
-    assert service._parse_b3_csv_number("1.234,56%") == 1_234.56
-    assert service._parse_b3_csv_number("-") is None
+    assert source._parse_b3_csv_number("1.234,56%") == 1_234.56
+    assert source._parse_b3_csv_number("-") is None
 
 
 def test_b3_open_interest_json_csv_and_history(tmp_path: Path) -> None:
     service = _service(tmp_path)
+    source = service.b3_source
     columns = [
         {"name": name}
-        for name in ["TckrSymb", "ISIN", "Asst", "XprtnCd", "SgmtNm", "OpnIntrst", "VartnOpnIntrst", "LockedQty", "UnlockedQty"]
+        for name in [
+            "TckrSymb",
+            "ISIN",
+            "Asst",
+            "XprtnCd",
+            "SgmtNm",
+            "OpnIntrst",
+            "VartnOpnIntrst",
+            "LockedQty",
+            "UnlockedQty",
+        ]
     ]
     raw = {
         "columns": columns,
@@ -239,7 +272,7 @@ def test_b3_open_interest_json_csv_and_history(tmp_path: Path) -> None:
             ["PETR4", "BRPETR", "PETR", "", "Cash", 500, 1, 0, 0],
         ],
     }
-    rows = service._normalize_b3_open_interest_table(
+    rows = source._normalize_b3_open_interest_table(
         raw,
         request_date=date(2026, 8, 17),
         tracked_assets=["WIN"],
@@ -248,12 +281,12 @@ def test_b3_open_interest_json_csv_and_history(tmp_path: Path) -> None:
         "Ticker symbol;ISIN code;Asset;Expiration code;Segment;Open interest;Variation open interest;Commodities locked qty;Unlocked qty by transfer\n"
         "WINQ26;BRWIN;WIN;Q26;Equity;1.200;150;10;5\n"
     )
-    csv_rows = service._normalize_b3_open_interest_csv(
+    csv_rows = source._normalize_b3_open_interest_csv(
         csv_text,
         request_date=date(2026, 8, 18),
         tracked_assets=["WIN"],
     )
-    history, products, contracts, futures = service._build_b3_open_interest_history(
+    history, products, contracts, futures = source._build_b3_open_interest_history(
         [
             {"date": "2026-08-17", "rows": rows},
             {"date": "2026-08-18", "rows": csv_rows},
@@ -268,13 +301,19 @@ def test_b3_open_interest_json_csv_and_history(tmp_path: Path) -> None:
     assert products[0]["leader_contract"] == "WINQ26"
     assert contracts[0]["ticker"] == "WINQ26"
     assert futures[0]["asset"] == "WIN"
-    assert service._normalize_b3_open_interest_csv("No results found", request_date=date.today(), tracked_assets=[]) == []
-    assert service._is_b3_future_contract("WINQ26", "WIN") is True
-    assert service._is_b3_future_contract("PETR4", "PETR") is False
+    assert (
+        source._normalize_b3_open_interest_csv(
+            "No results found", request_date=date.today(), tracked_assets=[]
+        )
+        == []
+    )
+    assert source._is_b3_future_contract("WINQ26", "WIN") is True
+    assert source._is_b3_future_contract("PETR4", "PETR") is False
 
 
 def test_b3_participant_history_dedupes_and_computes_daily_flow(tmp_path: Path) -> None:
     service = _service(tmp_path)
+    source = service.b3_source
     records = [
         {
             "publication_date": "2026-08-17",
@@ -308,27 +347,33 @@ def test_b3_participant_history_dedupes_and_computes_daily_flow(tmp_path: Path) 
         },
     ]
     duplicate = records[1] | {"publication_date": "2026-08-19"}
-    deduped = service._dedupe_b3_records(records + [duplicate, {}])
-    history, trends = service._build_b3_investor_history(deduped, min_points=21)
+    deduped = source._dedupe_b3_records(records + [duplicate, {}])
+    history, trends = source._build_b3_investor_history(deduped, min_points=21)
 
     assert len(deduped) == 2
     assert history[-1]["daily_net_flow_brl"] == 40
     assert trends[0]["rolling_5d_net_flow_brl"] == 40
-    assert service._same_month("2026-08-01", "2026-08-31") is True
-    assert service._same_month("2026-07-31", "2026-08-01") is False
-    assert service._candidate_bdi_dates(date(2026, 8, 17), limit=3) == [
+    assert source._same_month("2026-08-01", "2026-08-31") is True
+    assert source._same_month("2026-07-31", "2026-08-01") is False
+    assert source._candidate_bdi_dates(date(2026, 8, 17), limit=3) == [
         date(2026, 8, 17),
         date(2026, 8, 14),
         date(2026, 8, 13),
     ]
-    assert service._normalize_b3_participant_label("Instituicoes Financeiras") == "Instituicoes Financeiras"
-    assert service._parse_b3_number("1.234,50") == 1_234.5
-    assert service._build_b3_bdi_opportunities({"economic_indicators": []})[3]["status"] == "candidate"
+    assert (
+        source._normalize_b3_participant_label("Instituicoes Financeiras")
+        == "Instituicoes Financeiras"
+    )
+    assert source._parse_b3_number("1.234,50") == 1_234.5
+    assert (
+        source._build_b3_bdi_opportunities({"economic_indicators": []})[3]["status"] == "candidate"
+    )
 
 
 def test_cvm_informe_and_master_normalization_resolve_duplicates(tmp_path: Path) -> None:
     service = _service(tmp_path)
-    informe = service._normalize_informe(
+    source = service.cvm_source
+    informe = source._normalize_informe(
         pd.DataFrame(
             [
                 {
@@ -355,7 +400,7 @@ def test_cvm_informe_and_master_normalization_resolve_duplicates(tmp_path: Path)
             ]
         )
     )
-    master = service._normalize_master(
+    master = source._normalize_master(
         pd.DataFrame(
             [
                 {
@@ -385,7 +430,8 @@ def test_cvm_informe_and_master_normalization_resolve_duplicates(tmp_path: Path)
 
 def test_cvm_month_reader_and_range_loader_use_local_archives(tmp_path: Path, monkeypatch) -> None:
     service = _service(tmp_path)
-    archive_path = Path(service.raw_dir) / "cvm_informe" / "inf_diario_fi_202608.zip"
+    source = service.cvm_source
+    archive_path = Path(source.raw_dir) / "cvm_informe" / "inf_diario_fi_202608.zip"
     archive_path.parent.mkdir(parents=True, exist_ok=True)
     csv_data = (
         "CNPJ_FUNDO;DT_COMPTC;VL_PATRIM_LIQ;CAPTC_DIA;RESG_DIA;NR_COTST\n"
@@ -394,19 +440,19 @@ def test_cvm_month_reader_and_range_loader_use_local_archives(tmp_path: Path, mo
     with zipfile.ZipFile(archive_path, "w") as archive:
         archive.writestr("inf_diario.csv", csv_data.encode("latin1"))
 
-    monkeypatch.setattr(service, "_download", lambda *_args, **_kwargs: None)
-    frame, status = service._read_informe_month(
+    monkeypatch.setattr(source, "_download", lambda *_args, **_kwargs: None)
+    frame, status = source._read_informe_month(
         yyyymm="202608",
         url="https://example.test/informe.zip",
         force=False,
     )
     monkeypatch.setattr(
-        service,
+        source,
         "_discover_cvm_informe_resources",
         lambda: {"202608": "https://example.test/informe.zip"},
     )
-    monkeypatch.setattr(service, "_read_informe_month", lambda **_kwargs: (frame, status))
-    ranged, statuses = service._load_informe_diario(
+    monkeypatch.setattr(source, "_read_informe_month", lambda **_kwargs: (frame, status))
+    ranged, statuses = source.load_informe_diario(
         start_date=date(2026, 8, 1),
         end_date=date(2026, 8, 18),
         force=False,
@@ -443,7 +489,9 @@ def test_cache_history_and_cadastro_selection_rules(tmp_path: Path, monkeypatch)
     )
     assert cached is not None
     assert cached["report"]["cache_status"] == "fresh"
-    assert service._fresh_cached_dashboard(target_date=None, period="63d", history_days=None) is None
+    assert (
+        service._fresh_cached_dashboard(target_date=None, period="63d", history_days=None) is None
+    )
     assert service._resolve_history_days("invalid", period="63d") >= 78
 
     dates = pd.to_datetime(["2026-08-14"] * 120 + ["2026-08-17"] * 20)
@@ -457,9 +505,14 @@ def test_cache_history_and_cadastro_selection_rules(tmp_path: Path, monkeypatch)
 
     legacy = pd.DataFrame([{"cnpj_fundo": "1", "nome_fundo": "Legacy", "macro_classe": "Acoes"}])
     modern = pd.DataFrame([{"cnpj_fundo": "1", "nome_fundo": "Modern", "macro_classe": "Acoes"}])
-    monkeypatch.setattr(service, "_load_cadastro_legacy", lambda **_kwargs: (legacy, {"ok": True, "latency_ms": 2}))
-    monkeypatch.setattr(service, "_load_cadastro_rcvm175", lambda **_kwargs: (modern, {"ok": True, "latency_ms": 3}))
-    master, status = service._load_cadastro(force=False)
+    source = service.cvm_source
+    monkeypatch.setattr(
+        source, "_load_legacy_registry", lambda **_kwargs: (legacy, {"ok": True, "latency_ms": 2})
+    )
+    monkeypatch.setattr(
+        source, "_load_rcvm175_registry", lambda **_kwargs: (modern, {"ok": True, "latency_ms": 3})
+    )
+    master, status = source.load_fund_registry(force=False)
 
     assert master.iloc[0]["nome_fundo"] == "Modern"
     assert status["ok"] is True

@@ -818,7 +818,7 @@ class CvmCdaGraphService:
 
         def clean_rows(rows: list[sqlite3.Row], side: str) -> list[dict[str, Any]]:
             cleaned: list[dict[str, Any]] = []
-            for index, row in enumerate(rows, start=1):
+            for _index, row in enumerate(rows, start=1):
                 item = dict(row)
                 if self._is_generic_asset_text(item.get("asset_key")) or self._is_generic_asset_text(item.get("asset_class")):
                     continue
@@ -1488,7 +1488,9 @@ class CvmCdaGraphService:
             ),
         }
 
-    def _fetch_portfolio_similarity(self, con: sqlite3.Connection, month: str, *, limit: int) -> dict[str, Any]:
+    def _fetch_portfolio_similarity(  # noqa: C901
+        self, con: sqlite3.Connection, month: str, *, limit: int
+    ) -> dict[str, Any]:
         labels = self._asset_lens_labels()
         tagged_cte = self._asset_lens_tagged_cte()
         item_limit = max(12, min(int(limit or 40), 80))

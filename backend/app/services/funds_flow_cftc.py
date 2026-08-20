@@ -9,8 +9,7 @@ from typing import Any
 import numpy as np
 import requests
 
-from ..utils.logger import get_logger
-from .funds_flow_contracts import (
+from ..domains.funds_flow.contracts.source_catalog import (
     CFTC_COT_EXTRA_DATASETS,
     CFTC_EXTRA_HISTORY_WEEKS,
     CFTC_EXTRA_PARTICIPANTS,
@@ -21,6 +20,7 @@ from .funds_flow_contracts import (
     CFTC_TFF_PARTICIPANTS,
     CFTC_TFF_RESOURCE_URLS,
 )
+from ..utils.logger import get_logger
 from .funds_flow_utils import (
     _normalize_text,
     _parse_date,

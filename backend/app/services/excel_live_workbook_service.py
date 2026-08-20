@@ -9,7 +9,7 @@ from typing import Any
 
 from ..config import Config
 from ..utils.logger import get_logger
-from .market_screen_capture_service import MarketScreenCaptureCollectorManager
+from .market_screen_capture_service import MarketScreenCaptureService
 
 logger = get_logger("aquiles.excel_live_workbook")
 
@@ -42,9 +42,10 @@ def _safe_text_attr(target: Any, attr_name: str) -> str:
 class ExcelLiveWorkbookService:
     """Read a live fair value basket from an already-open Excel workbook."""
 
-    def __init__(self) -> None:
+    def __init__(self, market_screen_service: MarketScreenCaptureService | None = None) -> None:
         self._pythoncom = None
         self._win32 = None
+        self._market_screen_service = market_screen_service or MarketScreenCaptureService()
 
     def _load_modules(self) -> bool:
         if self._pythoncom and self._win32:
@@ -72,7 +73,9 @@ class ExcelLiveWorkbookService:
         return os.path.join(os.path.dirname(__file__), "excel_live_workbook_helper.py")
 
     def _helper_python_path(self) -> str:
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+        project_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+        )
         candidate = os.path.join(project_root, "backend", ".venv", "Scripts", "python.exe")
         if os.path.exists(candidate):
             return candidate
@@ -89,7 +92,9 @@ class ExcelLiveWorkbookService:
             "row_end": getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_ROW_END", 188),
             "name_column": getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_NAME_COLUMN", "H"),
             "price_column": getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_PRICE_COLUMN", "I"),
-            "change_column": getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_DAILY_CHANGE_COLUMN", "L"),
+            "change_column": getattr(
+                Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_DAILY_CHANGE_COLUMN", "L"
+            ),
         }
         try:
             completed = subprocess.run(
@@ -109,7 +114,11 @@ class ExcelLiveWorkbookService:
         return None
 
     def _find_workbook(self, excel) -> Any | None:
-        workbook_hint = str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_WORKBOOK_HINT", "") or "").strip().lower()
+        workbook_hint = (
+            str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_WORKBOOK_HINT", "") or "")
+            .strip()
+            .lower()
+        )
         workbook_count = int(getattr(excel.Workbooks, "Count", 0) or 0)
         for index in range(1, workbook_count + 1):
             try:
@@ -124,7 +133,11 @@ class ExcelLiveWorkbookService:
         return None
 
     def _candidate_sheets(self, workbook) -> list[Any]:
-        sheet_hint = str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_SHEET_HINT", "") or "").strip().lower()
+        sheet_hint = (
+            str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_SHEET_HINT", "") or "")
+            .strip()
+            .lower()
+        )
         worksheets: list[Any] = []
         count = int(getattr(workbook.Worksheets, "Count", 0) or 0)
         hinted: list[Any] = []
@@ -144,11 +157,27 @@ class ExcelLiveWorkbookService:
         return worksheets
 
     def _read_rows_from_sheet(self, sheet) -> list[dict[str, Any]]:
-        row_start = max(int(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_ROW_START", 85) or 85), 1)
-        row_end = max(int(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_ROW_END", 188) or 188), row_start)
-        name_col = str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_NAME_COLUMN", "H") or "H").strip().upper()
-        price_col = str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_PRICE_COLUMN", "I") or "I").strip().upper()
-        change_col = str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_DAILY_CHANGE_COLUMN", "L") or "L").strip().upper()
+        row_start = max(
+            int(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_ROW_START", 85) or 85), 1
+        )
+        row_end = max(
+            int(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_ROW_END", 188) or 188), row_start
+        )
+        name_col = (
+            str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_NAME_COLUMN", "H") or "H")
+            .strip()
+            .upper()
+        )
+        price_col = (
+            str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_PRICE_COLUMN", "I") or "I")
+            .strip()
+            .upper()
+        )
+        change_col = (
+            str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_DAILY_CHANGE_COLUMN", "L") or "L")
+            .strip()
+            .upper()
+        )
 
         names = sheet.Range(f"{name_col}{row_start}:{name_col}{row_end}").Value
         prices = sheet.Range(f"{price_col}{row_start}:{price_col}{row_end}").Value
@@ -167,22 +196,27 @@ class ExcelLiveWorkbookService:
             change_value = changes[offset][0] if isinstance(changes, tuple) else None
             price = _safe_float(price_value)
             daily_change = _safe_float(change_value)
-            rows.append({
-                "row_number": row_start + offset,
-                "security": security,
-                "normalized_security": _normalize_security(security),
-                "price": price,
-                "daily_change_pct": daily_change,
-            })
+            rows.append(
+                {
+                    "row_number": row_start + offset,
+                    "security": security,
+                    "normalized_security": _normalize_security(security),
+                    "price": price,
+                    "daily_change_pct": daily_change,
+                }
+            )
         return rows
 
     def read_fair_value_basket(self) -> dict[str, Any]:
         if getattr(Config, "MARKET_SCREEN_W32_REPLACE_EXCEL_BASKET_ENABLE", False):
-            manager = MarketScreenCaptureCollectorManager.get_instance()
-            manager.resume_if_needed()
-            return manager.get_excel_compatible_payload(
-                max_age_seconds=getattr(Config, "MARKET_SCREEN_W32_MAX_AGE_SECONDS", None),
-            )
+            latest_capture = self._market_screen_service.read_latest_capture()
+            if latest_capture:
+                return self._market_screen_service.build_excel_compatible_payload(latest_capture)
+            return {
+                "ok": False,
+                "source": "market_screen_w32",
+                "error": "market_screen_capture_unavailable",
+            }
 
         if not getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_ENABLE", False):
             return {
@@ -211,7 +245,9 @@ class ExcelLiveWorkbookService:
                     "ok": False,
                     "source": "excel_live_workbook",
                     "error": "workbook_not_found",
-                    "workbook_hint": str(getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_WORKBOOK_HINT", "") or ""),
+                    "workbook_hint": str(
+                        getattr(Config, "OPTIONS_FAIR_VALUE_EXCEL_BASKET_WORKBOOK_HINT", "") or ""
+                    ),
                 }
 
             best_rows: list[dict[str, Any]] = []

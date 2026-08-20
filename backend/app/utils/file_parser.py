@@ -97,8 +97,8 @@ class FileParser:
         """从PDF提取文本"""
         try:
             import fitz  # PyMuPDF
-        except ImportError:
-            raise ImportError("需要安装PyMuPDF: pip install PyMuPDF")
+        except ImportError as exc:
+            raise ImportError("需要安装PyMuPDF: pip install PyMuPDF") from exc
         
         text_parts = []
         with fitz.open(file_path) as doc:
@@ -185,4 +185,3 @@ def split_text_into_chunks(
         start = end - overlap if end < len(text) else len(text)
     
     return chunks
-

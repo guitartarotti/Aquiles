@@ -73,7 +73,7 @@ class OptionsCollectorManager:
     _instance: Optional["OptionsCollectorManager"] = None
     _instance_lock = threading.Lock()
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.store = OptionsStore()
         self.snapshot_service = OptionsSnapshotService(store=self.store)
         self.history_service = OptionsHistoryService(store=self.store, snapshot_service=self.snapshot_service)
@@ -519,9 +519,10 @@ class OptionsCollectorManager:
     def stop(self) -> dict[str, Any]:
         with self._runtime_lock:
             self._manual_stop_requested = True
-            if self._loop_alive():
+            loop_thread = self._loop_thread
+            if loop_thread is not None and loop_thread.is_alive():
                 self._stop_event.set()
-                self._loop_thread.join(timeout=3)
+                loop_thread.join(timeout=3)
                 if not self._loop_alive():
                     self._loop_thread = None
             self.store.update_collector_status(
@@ -591,12 +592,13 @@ class OptionsCollectorManager:
     ) -> dict[str, Any]:
         if _collector_disabled_in_process():
             raise RuntimeError("Options collector is disabled in this process; use aquiles-options-collector-service.")
-        result = {
+        result: dict[str, Any] = {
             "captured_at": _now_iso(),
             "underlyings": {},
         }
+        underlying_results: dict[str, Any] = result["underlyings"]
         for underlying in Config.OPTIONS_BLOOMBERG_UNDERLYINGS:
-            result["underlyings"][underlying] = self.snapshot_service.collect_underlying_snapshot(
+            underlying_results[underlying] = self.snapshot_service.collect_underlying_snapshot(
                 underlying_security=underlying,
                 include_structural=include_structural,
                 include_liquid=include_liquid,

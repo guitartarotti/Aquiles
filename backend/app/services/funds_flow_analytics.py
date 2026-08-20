@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import json
 import os
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -9,12 +8,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ..utils.atomic_io import atomic_json_dump
-from .funds_flow_contracts import (
+from ..domains.funds_flow.contracts import FundFlowSnapshotSummary
+from ..domains.funds_flow.contracts.source_catalog import (
     FUNDS_FLOW_LOCAL_SCHEMA_VERSION,
     SOURCE_INVENTORY,
     WINDOWS,
 )
+from ..utils.atomic_io import atomic_json_dump
 from .funds_flow_insights import FundsFlowInsightAgent
 from .funds_flow_utils import (
     _clean_json,
@@ -69,7 +69,7 @@ class FundsFlowAnalyticsMixin:
         top_inflows = self._ranking_by_class(class_latest, ascending=False, top_n=5)
         top_outflows = self._ranking_by_class(class_latest, ascending=True, top_n=5)
         anbima_payload = copy.deepcopy(anbima_funds) if anbima_funds else {"status": "not_loaded"}
-        anbima_payload["validation"] = self._build_anbima_validation(
+        anbima_payload["validation"] = self.anbima_source.build_validation(
             class_latest,
             anbima_payload,
             as_of_date=as_of_date,
@@ -118,14 +118,20 @@ class FundsFlowAnalyticsMixin:
             "timeseries": {
                 "flow_by_class": self._records_flow_by_class(class_daily, as_of_date=as_of_date),
                 "industry_flow": self._records_industry_flow(industry_daily, as_of_date=as_of_date),
-                "monthly_stacked_flow": self._records_monthly_flow(class_daily, as_of_date=as_of_date),
+                "monthly_stacked_flow": self._records_monthly_flow(
+                    class_daily, as_of_date=as_of_date
+                ),
             },
             "heatmap": self._build_heatmap(class_daily, as_of_date=as_of_date),
             "rankings": {
                 "by_fund": self._ranking_by_fund(fund_df, as_of_date=as_of_date),
                 "by_class": self._ranking_by_class(class_latest, ascending=False, top_n=20),
-                "by_manager": self._ranking_by_dimension(fund_df, as_of_date=as_of_date, dimension="gestor"),
-                "by_strategy_tag": self._ranking_by_dimension(fund_df, as_of_date=as_of_date, dimension="strategy_tag"),
+                "by_manager": self._ranking_by_dimension(
+                    fund_df, as_of_date=as_of_date, dimension="gestor"
+                ),
+                "by_strategy_tag": self._ranking_by_dimension(
+                    fund_df, as_of_date=as_of_date, dimension="strategy_tag"
+                ),
             },
             "anbima_funds": anbima_payload,
             "brazil_vs_global": self._build_brazil_vs_global_shell(
@@ -176,7 +182,9 @@ class FundsFlowAnalyticsMixin:
                 anbima_funds=anbima_payload,
                 ici_global_flows=ici_global_flows,
             ),
-            "stress_panel": self._build_stress_panel(fund_df, as_of_date=as_of_date, latest_pressure=kpis.get("pressure_index")),
+            "stress_panel": self._build_stress_panel(
+                fund_df, as_of_date=as_of_date, latest_pressure=kpis.get("pressure_index")
+            ),
             "source_inventory": [item.as_dict() for item in SOURCE_INVENTORY],
             "source_status": self._merge_source_status(source_status),
         }
@@ -224,9 +232,9 @@ class FundsFlowAnalyticsMixin:
             if isinstance(fallback, bool):
                 df[column] = df[column].astype(bool)
 
-        df.loc[df["nome_fundo"].astype(str).str.strip() == "", "nome_fundo"] = (
-            "Fundo " + df["cnpj_fundo"].astype(str)
-        )
+        df.loc[df["nome_fundo"].astype(str).str.strip() == "", "nome_fundo"] = "Fundo " + df[
+            "cnpj_fundo"
+        ].astype(str)
         if "id_subclasse" not in df.columns:
             df["id_subclasse"] = ""
         df["id_subclasse"] = df["id_subclasse"].fillna("").astype(str).str.strip()
@@ -242,14 +250,18 @@ class FundsFlowAnalyticsMixin:
         df["pl_lag"] = grouped["pl"].shift(1)
         df["quota_lag"] = grouped["vl_quota"].shift(1)
         df["cotistas_lag"] = grouped["cotistas"].shift(1)
-        df["flow_pct_pl"] = np.where(df["pl_lag"] > 0, df["captacao_liquida"] / df["pl_lag"], np.nan)
+        df["flow_pct_pl"] = np.where(
+            df["pl_lag"] > 0, df["captacao_liquida"] / df["pl_lag"], np.nan
+        )
         df["delta_cotistas"] = df["cotistas"] - df["cotistas_lag"]
         df["quota_return"] = np.nan
         valid_quota = (df["vl_quota"] > 0) & (df["quota_lag"] > 0)
-        df.loc[valid_quota, "quota_return"] = np.log(df.loc[valid_quota, "vl_quota"] / df.loc[valid_quota, "quota_lag"])
+        df.loc[valid_quota, "quota_return"] = np.log(
+            df.loc[valid_quota, "vl_quota"] / df.loc[valid_quota, "quota_lag"]
+        )
         for window in WINDOWS:
             df[f"rolling_flow_{window}d"] = grouped["captacao_liquida"].transform(
-                lambda series: series.rolling(window, min_periods=1).sum()
+                lambda series, window=window: series.rolling(window, min_periods=1).sum()
             )
             df[f"rolling_flow_pct_pl_{window}d"] = np.where(
                 grouped["pl"].shift(window) > 0,
@@ -291,7 +303,7 @@ class FundsFlowAnalyticsMixin:
         for window in WINDOWS:
             group = class_daily.groupby("macro_classe", sort=False)
             class_daily[f"rolling_flow_{window}d"] = group["captacao_liquida_total"].transform(
-                lambda series: series.rolling(window, min_periods=1).sum()
+                lambda series, window=window: series.rolling(window, min_periods=1).sum()
             )
             base_pl = group["pl_total"].shift(window)
             class_daily[f"rolling_flow_pct_pl_{window}d"] = np.where(
@@ -300,19 +312,23 @@ class FundsFlowAnalyticsMixin:
                 np.nan,
             )
             class_daily[f"quota_return_{window}d"] = group["quota_return"].transform(
-                lambda series: series.rolling(window, min_periods=1).sum()
+                lambda series, window=window: series.rolling(window, min_periods=1).sum()
             )
             class_daily[f"delta_cotistas_{window}d"] = group["delta_cotistas_total"].transform(
-                lambda series: series.rolling(window, min_periods=1).sum()
+                lambda series, window=window: series.rolling(window, min_periods=1).sum()
             )
-        class_daily["flow_zscore_21d"] = class_daily.groupby("macro_classe", sort=False)["flow_pct_pl"].transform(
-            lambda series: _zscore(series.fillna(0.0), 21)
+        class_daily["flow_zscore_21d"] = class_daily.groupby("macro_classe", sort=False)[
+            "flow_pct_pl"
+        ].transform(lambda series: _zscore(series.fillna(0.0), 21))
+        class_daily["flow_zscore_63d"] = class_daily.groupby("macro_classe", sort=False)[
+            "flow_pct_pl"
+        ].transform(lambda series: _zscore(series.fillna(0.0), 63))
+        class_daily["share_pl_industria"] = class_daily["pl_total"] / class_daily.groupby("dt")[
+            "pl_total"
+        ].transform("sum")
+        daily_abs_flow = class_daily.groupby("dt")["captacao_liquida_total"].transform(
+            lambda series: series.abs().sum()
         )
-        class_daily["flow_zscore_63d"] = class_daily.groupby("macro_classe", sort=False)["flow_pct_pl"].transform(
-            lambda series: _zscore(series.fillna(0.0), 63)
-        )
-        class_daily["share_pl_industria"] = class_daily["pl_total"] / class_daily.groupby("dt")["pl_total"].transform("sum")
-        daily_abs_flow = class_daily.groupby("dt")["captacao_liquida_total"].transform(lambda series: series.abs().sum())
         class_daily["share_flow_industria"] = np.where(
             daily_abs_flow > 0,
             class_daily["captacao_liquida_total"] / daily_abs_flow,
@@ -327,9 +343,9 @@ class FundsFlowAnalyticsMixin:
         class_daily["flow_pct_pl_21d_zscore"] = class_daily.groupby("macro_classe", sort=False)[
             "rolling_flow_pct_pl_21d"
         ].transform(lambda series: _zscore(series.fillna(0.0), 21))
-        class_daily["rolling_flow_pct_pl_63d_zscore"] = class_daily.groupby("macro_classe", sort=False)[
-            "rolling_flow_pct_pl_63d"
-        ].transform(lambda series: _zscore(series.fillna(0.0), 63))
+        class_daily["rolling_flow_pct_pl_63d_zscore"] = class_daily.groupby(
+            "macro_classe", sort=False
+        )["rolling_flow_pct_pl_63d"].transform(lambda series: _zscore(series.fillna(0.0), 63))
         class_daily["pressure_index"] = (
             0.35 * class_daily["flow_pct_pl_21d_zscore"]
             + 0.25 * class_daily["rolling_flow_pct_pl_63d_zscore"]
@@ -369,24 +385,38 @@ class FundsFlowAnalyticsMixin:
             np.nan,
         )
         for window in WINDOWS:
-            industry[f"rolling_flow_{window}d"] = industry["captacao_liquida_total"].rolling(
-                window,
-                min_periods=1,
-            ).sum()
+            industry[f"rolling_flow_{window}d"] = (
+                industry["captacao_liquida_total"]
+                .rolling(
+                    window,
+                    min_periods=1,
+                )
+                .sum()
+            )
             base_pl = industry["pl_total"].shift(window)
             industry[f"rolling_flow_pct_pl_{window}d"] = np.where(
                 base_pl > 0,
                 industry[f"rolling_flow_{window}d"] / base_pl,
                 np.nan,
             )
-            industry[f"quota_return_{window}d"] = industry["quota_return"].rolling(window, min_periods=1).sum()
-            industry[f"delta_cotistas_{window}d"] = industry["delta_cotistas_total"].rolling(window, min_periods=1).sum()
+            industry[f"quota_return_{window}d"] = (
+                industry["quota_return"].rolling(window, min_periods=1).sum()
+            )
+            industry[f"delta_cotistas_{window}d"] = (
+                industry["delta_cotistas_total"].rolling(window, min_periods=1).sum()
+            )
         industry["flow_zscore_21d"] = _zscore(industry["flow_pct_pl"].fillna(0.0), 21)
         industry["flow_zscore_63d"] = _zscore(industry["flow_pct_pl"].fillna(0.0), 63)
-        industry["delta_cotistas_zscore_21d"] = _zscore(industry["delta_cotistas_21d"].fillna(0.0), 21)
+        industry["delta_cotistas_zscore_21d"] = _zscore(
+            industry["delta_cotistas_21d"].fillna(0.0), 21
+        )
         industry["quota_return_zscore_21d"] = _zscore(industry["quota_return_21d"].fillna(0.0), 21)
-        industry["flow_pct_pl_21d_zscore"] = _zscore(industry["rolling_flow_pct_pl_21d"].fillna(0.0), 21)
-        industry["rolling_flow_pct_pl_63d_zscore"] = _zscore(industry["rolling_flow_pct_pl_63d"].fillna(0.0), 63)
+        industry["flow_pct_pl_21d_zscore"] = _zscore(
+            industry["rolling_flow_pct_pl_21d"].fillna(0.0), 21
+        )
+        industry["rolling_flow_pct_pl_63d_zscore"] = _zscore(
+            industry["rolling_flow_pct_pl_63d"].fillna(0.0), 63
+        )
         industry["pressure_index"] = (
             0.35 * industry["flow_pct_pl_21d_zscore"]
             + 0.25 * industry["rolling_flow_pct_pl_63d_zscore"]
@@ -418,7 +448,9 @@ class FundsFlowAnalyticsMixin:
             row_date = row.get("dt")
             local_summary = {
                 "status": "ok",
-                "date": row_date.date().isoformat() if hasattr(row_date, "date") else str(row_date or as_of_date),
+                "date": row_date.date().isoformat()
+                if hasattr(row_date, "date")
+                else str(row_date or as_of_date),
                 "aum": _safe_float(row.get("pl_total"), 2),
                 "net_flow_1d": _safe_float(row.get("captacao_liquida_total"), 2),
                 "net_flow_5d": _safe_float(row.get("rolling_flow_5d"), 2),
@@ -485,7 +517,7 @@ class FundsFlowAnalyticsMixin:
             or "ETF" in str(item.get("normalized_name") or "").upper()
         ]
 
-        ici_weekly = ((ici_global_flows or {}).get("weekly") or {})
+        ici_weekly = (ici_global_flows or {}).get("weekly") or {}
         ici_latest = (ici_weekly.get("latest_by_vehicle") or {}).get("etf") or {}
         ici_monthly = (ici_global_flows or {}).get("monthly_etf") or {}
 
@@ -516,7 +548,9 @@ class FundsFlowAnalyticsMixin:
             },
         }
 
-    def _build_kpis(self, industry_daily: pd.DataFrame, *, latest: pd.Series, as_of_date: date) -> dict[str, Any]:
+    def _build_kpis(
+        self, industry_daily: pd.DataFrame, *, latest: pd.Series, as_of_date: date
+    ) -> dict[str, Any]:
         year_rows = industry_daily[industry_daily["dt"].dt.year == as_of_date.year]
         idx = latest.name
         start_21_idx = max(0, int(idx) - 21)
@@ -528,7 +562,9 @@ class FundsFlowAnalyticsMixin:
             "net_flow_5d": _safe_float(latest.get("rolling_flow_5d"), 2),
             "net_flow_21d": _safe_float(latest.get("rolling_flow_21d"), 2),
             "net_flow_63d": _safe_float(latest.get("rolling_flow_63d"), 2),
-            "net_flow_ytd": _safe_float(year_rows["captacao_liquida_total"].sum() if not year_rows.empty else 0.0, 2),
+            "net_flow_ytd": _safe_float(
+                year_rows["captacao_liquida_total"].sum() if not year_rows.empty else 0.0, 2
+            ),
             "flow_pct_pl_21d": _safe_div(latest.get("rolling_flow_21d"), start_21_pl),
             "total_shareholders": _safe_float(latest.get("cotistas_total"), 0),
             "delta_shareholders_21d": _safe_float(latest.get("delta_cotistas_21d"), 0),
@@ -537,7 +573,9 @@ class FundsFlowAnalyticsMixin:
             "regime": _regime_from_pressure(pressure),
         }
 
-    def _ranking_by_class(self, class_latest: pd.DataFrame, *, ascending: bool, top_n: int) -> list[dict[str, Any]]:
+    def _ranking_by_class(
+        self, class_latest: pd.DataFrame, *, ascending: bool, top_n: int
+    ) -> list[dict[str, Any]]:
         if class_latest.empty:
             return []
         ranked = class_latest.sort_values("rolling_flow_21d", ascending=ascending).head(top_n)
@@ -585,12 +623,16 @@ class FundsFlowAnalyticsMixin:
                     "aum": _safe_float(row.get("pl"), 2),
                     "cotistas": _safe_float(row.get("cotistas"), 0),
                     "delta_cotistas": _safe_float(row.get("delta_cotistas"), 0),
-                    "classification_confidence": _safe_float(row.get("classification_confidence"), 3),
+                    "classification_confidence": _safe_float(
+                        row.get("classification_confidence"), 3
+                    ),
                 }
             )
         return records
 
-    def _ranking_by_dimension(self, fund_df: pd.DataFrame, *, as_of_date: date, dimension: str) -> list[dict[str, Any]]:
+    def _ranking_by_dimension(
+        self, fund_df: pd.DataFrame, *, as_of_date: date, dimension: str
+    ) -> list[dict[str, Any]]:
         latest = fund_df[fund_df["dt"].dt.date == as_of_date].copy()
         if latest.empty or dimension not in latest.columns:
             return []
@@ -622,7 +664,9 @@ class FundsFlowAnalyticsMixin:
             for rank, (_, row) in enumerate(grouped.iterrows(), start=1)
         ]
 
-    def _records_flow_by_class(self, class_daily: pd.DataFrame, *, as_of_date: date) -> list[dict[str, Any]]:
+    def _records_flow_by_class(
+        self, class_daily: pd.DataFrame, *, as_of_date: date
+    ) -> list[dict[str, Any]]:
         start = as_of_date - timedelta(days=180)
         rows = class_daily[class_daily["dt"].dt.date >= start].sort_values(["dt", "macro_classe"])
         return [
@@ -643,7 +687,9 @@ class FundsFlowAnalyticsMixin:
             for row in rows.itertuples(index=False)
         ]
 
-    def _records_industry_flow(self, industry_daily: pd.DataFrame, *, as_of_date: date) -> list[dict[str, Any]]:
+    def _records_industry_flow(
+        self, industry_daily: pd.DataFrame, *, as_of_date: date
+    ) -> list[dict[str, Any]]:
         start = as_of_date - timedelta(days=180)
         rows = industry_daily[industry_daily["dt"].dt.date >= start].sort_values("dt")
         return [
@@ -660,7 +706,9 @@ class FundsFlowAnalyticsMixin:
             for row in rows.itertuples(index=False)
         ]
 
-    def _records_monthly_flow(self, class_daily: pd.DataFrame, *, as_of_date: date) -> list[dict[str, Any]]:
+    def _records_monthly_flow(
+        self, class_daily: pd.DataFrame, *, as_of_date: date
+    ) -> list[dict[str, Any]]:
         start = as_of_date - timedelta(days=395)
         rows = class_daily[class_daily["dt"].dt.date >= start].copy()
         if rows.empty:
@@ -689,7 +737,11 @@ class FundsFlowAnalyticsMixin:
         rows = class_daily[class_daily["dt"].dt.date >= start].copy()
         if rows.empty:
             return {"x": [], "y": [], "z": [], "metric": "flow_zscore_21d", "cells": []}
-        rows["week"] = rows["dt"].dt.to_period("W-FRI").apply(lambda period: period.end_time.date().isoformat())
+        rows["week"] = (
+            rows["dt"]
+            .dt.to_period("W-FRI")
+            .apply(lambda period: period.end_time.date().isoformat())
+        )
         weekly = (
             rows.groupby(["week", "macro_classe"], as_index=False)
             .agg(
@@ -705,10 +757,7 @@ class FundsFlowAnalyticsMixin:
         y_values = sorted(weekly["macro_classe"].unique().tolist())
         z: list[list[float | None]] = []
         cells: list[dict[str, Any]] = []
-        index = {
-            (row.week, row.macro_classe): row
-            for row in weekly.itertuples(index=False)
-        }
+        index = {(row.week, row.macro_classe): row for row in weekly.itertuples(index=False)}
         for macro in y_values:
             row_values: list[float | None] = []
             for week in x_values:
@@ -745,10 +794,17 @@ class FundsFlowAnalyticsMixin:
         if rows.empty:
             local = []
         else:
-            rows["week"] = rows["dt"].dt.to_period("W-FRI").apply(lambda period: period.end_time.date().isoformat())
+            rows["week"] = (
+                rows["dt"]
+                .dt.to_period("W-FRI")
+                .apply(lambda period: period.end_time.date().isoformat())
+            )
             weekly = (
                 rows.groupby(["week", "macro_classe"], as_index=False)
-                .agg(net_flow=("captacao_liquida_total", "sum"), flow_pct_pl=("rolling_flow_pct_pl_21d", "last"))
+                .agg(
+                    net_flow=("captacao_liquida_total", "sum"),
+                    flow_pct_pl=("rolling_flow_pct_pl_21d", "last"),
+                )
                 .sort_values(["week", "macro_classe"])
             )
             local = [
@@ -762,7 +818,9 @@ class FundsFlowAnalyticsMixin:
                 }
                 for row in weekly.itertuples(index=False)
             ]
-        ici_payload = copy.deepcopy(ici_global_flows) if ici_global_flows else {"status": "not_loaded"}
+        ici_payload = (
+            copy.deepcopy(ici_global_flows) if ici_global_flows else {"status": "not_loaded"}
+        )
         ici_weekly = ici_payload.get("weekly") or {}
         global_rows = [
             {
@@ -781,7 +839,9 @@ class FundsFlowAnalyticsMixin:
             }
             for row in (ici_weekly.get("weekly_series") or [])
         ]
-        cftc_payload = copy.deepcopy(cftc_positioning) if cftc_positioning else {"status": "not_loaded"}
+        cftc_payload = (
+            copy.deepcopy(cftc_positioning) if cftc_positioning else {"status": "not_loaded"}
+        )
         return {
             "local": local,
             "global": global_rows,
@@ -789,15 +849,21 @@ class FundsFlowAnalyticsMixin:
             "ici_global_flows": ici_payload,
             "cftc_positioning": cftc_payload,
             "status": {
-                "ici": "active" if ici_payload.get("status") == "ok" else ici_payload.get("status") or "configured_not_loaded",
-                "cftc": "active" if cftc_payload.get("status") == "ok" else cftc_payload.get("status") or "configured_not_loaded",
+                "ici": "active"
+                if ici_payload.get("status") == "ok"
+                else ici_payload.get("status") or "configured_not_loaded",
+                "cftc": "active"
+                if cftc_payload.get("status") == "ok"
+                else cftc_payload.get("status") or "configured_not_loaded",
                 "fred": "configured_not_loaded",
                 "bcb": "configured_not_loaded",
                 "note": "Local CVM flow is live; ICI loads fund flows; CFTC loads weekly TFF positioning as of Tuesday with usual Friday release.",
             },
         }
 
-    def _build_stress_panel(self, fund_df: pd.DataFrame, *, as_of_date: date, latest_pressure: Any) -> dict[str, Any]:
+    def _build_stress_panel(
+        self, fund_df: pd.DataFrame, *, as_of_date: date, latest_pressure: Any
+    ) -> dict[str, Any]:
         latest = fund_df[fund_df["dt"].dt.date == as_of_date].copy()
         if latest.empty:
             return {
@@ -812,7 +878,9 @@ class FundsFlowAnalyticsMixin:
         total_aum = latest["pl"].sum()
         redemptions = negative["captacao_liquida"].abs()
         total_redemptions = redemptions.sum()
-        hhi = float(((redemptions / total_redemptions) ** 2).sum()) if total_redemptions > 0 else 0.0
+        hhi = (
+            float(((redemptions / total_redemptions) ** 2).sum()) if total_redemptions > 0 else 0.0
+        )
         largest = float(redemptions.max() / total_redemptions) if total_redemptions > 0 else 0.0
         pct_funds_negative = float(len(negative) / total_funds) if total_funds else 0.0
         pct_aum_negative = float(negative["pl"].sum() / total_aum) if total_aum > 0 else 0.0
@@ -862,18 +930,25 @@ class FundsFlowAnalyticsMixin:
                     "ok": combined_ok,
                     "status": "active" if combined_ok else current.get("status", "configured"),
                     "rows": int(status.get("rows") or 0) + int(current.get("rows") or 0),
-                    "latest_error": None if combined_ok else (status.get("error") or current.get("latest_error")),
-                    "latency_ms": int(status.get("latency_ms") or 0) + int(current.get("latency_ms") or 0),
-                    "cached_path": status.get("cached_path") if status_ok or not current.get("cached_path") else current.get("cached_path"),
+                    "latest_error": None
+                    if combined_ok
+                    else (status.get("error") or current.get("latest_error")),
+                    "latency_ms": int(status.get("latency_ms") or 0)
+                    + int(current.get("latency_ms") or 0),
+                    "cached_path": status.get("cached_path")
+                    if status_ok or not current.get("cached_path")
+                    else current.get("cached_path"),
                     "cached_paths": status.get("cached_paths") or current.get("cached_paths"),
                     "url": status.get("url") or current.get("url"),
                     "latest_data_date": _max_iso_date_value(
                         current.get("latest_data_date"),
                         status.get("latest_data_date"),
                     ),
-                    "reference_label": status.get("reference_label") or current.get("reference_label"),
+                    "reference_label": status.get("reference_label")
+                    or current.get("reference_label"),
                     "report_date": status.get("report_date") or current.get("report_date"),
-                    "publication_date": status.get("publication_date") or current.get("publication_date"),
+                    "publication_date": status.get("publication_date")
+                    or current.get("publication_date"),
                     "last_captured_at": _max_iso_datetime_value(current_capture, status_capture),
                 }
             )
@@ -882,24 +957,36 @@ class FundsFlowAnalyticsMixin:
 
     def _write_derived_files(self, payload: dict[str, Any]) -> None:
         os.makedirs(self.derived_dir, exist_ok=True)
-        atomic_json_dump(os.path.join(self.derived_dir, "dashboard_payload.schema_sample.json"), payload, indent=2)
+        atomic_json_dump(
+            os.path.join(self.derived_dir, "dashboard_payload.schema_sample.json"),
+            payload,
+            indent=2,
+        )
         for name in ["flow_by_class", "industry_flow", "monthly_stacked_flow"]:
             rows = payload.get("timeseries", {}).get(name, [])
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"{name}.csv"), index=False
+                )
         for name in ["by_fund", "by_class", "by_manager", "by_strategy_tag"]:
             rows = payload.get("rankings", {}).get(name, [])
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"ranking_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"ranking_{name}.csv"), index=False
+                )
         anbima_payload = payload.get("anbima_funds") or {}
         anbima_daily = anbima_payload.get("consolidated_daily") or {}
         for name in ["categories", "types", "top_type_inflows_mtd", "top_type_outflows_mtd"]:
             rows = anbima_daily.get(name, [])
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"anbima_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"anbima_{name}.csv"), index=False
+                )
         validation_rows = (anbima_payload.get("validation") or {}).get("rows") or []
         if validation_rows:
-            pd.DataFrame(validation_rows).to_csv(os.path.join(self.derived_dir, "anbima_cvm_validation.csv"), index=False)
+            pd.DataFrame(validation_rows).to_csv(
+                os.path.join(self.derived_dir, "anbima_cvm_validation.csv"), index=False
+            )
         for name, ranking in (anbima_payload.get("rankings") or {}).items():
             rows = ranking.get("top_aum") or []
             if rows:
@@ -911,30 +998,51 @@ class FundsFlowAnalyticsMixin:
                     os.path.join(self.derived_dir, f"anbima_ranking_{name}.csv"),
                     index=False,
                 )
-        articles = ((anbima_payload.get("bulletin") or {}).get("latest_articles") or [])
+        articles = (anbima_payload.get("bulletin") or {}).get("latest_articles") or []
         if articles:
-            pd.DataFrame(articles).to_csv(os.path.join(self.derived_dir, "anbima_bulletin_articles.csv"), index=False)
-        ici_payload = ((payload.get("brazil_vs_global") or {}).get("ici_global_flows") or {})
+            pd.DataFrame(articles).to_csv(
+                os.path.join(self.derived_dir, "anbima_bulletin_articles.csv"), index=False
+            )
+        ici_payload = (payload.get("brazil_vs_global") or {}).get("ici_global_flows") or {}
         ici_weekly = ici_payload.get("weekly") or {}
         for name in ["weekly_series", "monthly_series"]:
             rows = ici_weekly.get(name) or []
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"ici_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"ici_{name}.csv"), index=False
+                )
         ici_monthly_etf = ici_payload.get("monthly_etf") or {}
         for name in ["assets_by_type", "issuance"]:
             rows = ici_monthly_etf.get(name) or []
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"ici_monthly_etf_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"ici_monthly_etf_{name}.csv"), index=False
+                )
         ici_worldwide = ici_payload.get("worldwide_quarterly") or {}
-        for name in ["regions", "countries", "top_country_etf_net_sales", "bottom_country_etf_net_sales"]:
+        for name in [
+            "regions",
+            "countries",
+            "top_country_etf_net_sales",
+            "bottom_country_etf_net_sales",
+        ]:
             rows = ici_worldwide.get(name) or []
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"ici_worldwide_{name}.csv"), index=False)
-        cftc_payload = ((payload.get("brazil_vs_global") or {}).get("cftc_positioning") or {})
-        for name in ["latest_contracts", "focus_contracts", "weekly_series", "participant_summary", "asset_bucket_summary"]:
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"ici_worldwide_{name}.csv"), index=False
+                )
+        cftc_payload = (payload.get("brazil_vs_global") or {}).get("cftc_positioning") or {}
+        for name in [
+            "latest_contracts",
+            "focus_contracts",
+            "weekly_series",
+            "participant_summary",
+            "asset_bucket_summary",
+        ]:
             rows = cftc_payload.get(name) or []
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"cftc_tff_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"cftc_tff_{name}.csv"), index=False
+                )
         for name in [
             "datasets",
             "family_summaries",
@@ -945,12 +1053,16 @@ class FundsFlowAnalyticsMixin:
         ]:
             rows = cftc_payload.get(name) or []
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"cftc_cot_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"cftc_cot_{name}.csv"), index=False
+                )
         b3_payload = payload.get("b3_investor_participation") or {}
         for name in ["history", "trend_by_participant", "daily_reports", "economic_indicators"]:
             rows = b3_payload.get(name, [])
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"b3_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"b3_{name}.csv"), index=False
+                )
         b3_monthly = payload.get("b3_investor_participation_monthly") or {}
         if b3_monthly.get("rows"):
             pd.DataFrame(b3_monthly["rows"]).to_csv(
@@ -968,28 +1080,40 @@ class FundsFlowAnalyticsMixin:
         ]:
             rows = b3_market_data.get(name, [])
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"b3_market_data_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"b3_market_data_{name}.csv"), index=False
+                )
         b3_open_interest = payload.get("b3_open_interest") or {}
         for name in ["history", "product_summary", "latest_contracts", "futures_summary"]:
             rows = b3_open_interest.get(name, [])
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"b3_open_interest_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"b3_open_interest_{name}.csv"), index=False
+                )
         b3_etfs = payload.get("b3_etfs") or {}
         for name in ["funds", "categories"]:
             rows = b3_etfs.get(name) or []
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"b3_etfs_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"b3_etfs_{name}.csv"), index=False
+                )
         bcb_macro = payload.get("bcb_macro") or {}
         for name in ["series", "ptax_usd"]:
             rows = bcb_macro.get(name) or []
             if rows:
-                pd.DataFrame(rows).to_csv(os.path.join(self.derived_dir, f"bcb_macro_{name}.csv"), index=False)
+                pd.DataFrame(rows).to_csv(
+                    os.path.join(self.derived_dir, f"bcb_macro_{name}.csv"), index=False
+                )
         etf_panel = payload.get("etf_panel") or {}
         etf_local = etf_panel.get("local") or {}
         if etf_local.get("timeseries"):
-            pd.DataFrame(etf_local["timeseries"]).to_csv(os.path.join(self.derived_dir, "etf_local_timeseries.csv"), index=False)
+            pd.DataFrame(etf_local["timeseries"]).to_csv(
+                os.path.join(self.derived_dir, "etf_local_timeseries.csv"), index=False
+            )
         if etf_local.get("top_funds"):
-            pd.DataFrame(etf_local["top_funds"]).to_csv(os.path.join(self.derived_dir, "etf_local_top_funds.csv"), index=False)
+            pd.DataFrame(etf_local["top_funds"]).to_csv(
+                os.path.join(self.derived_dir, "etf_local_top_funds.csv"), index=False
+            )
 
     def _append_snapshot_summary(self, payload: dict[str, Any]) -> None:
         report = payload.get("report") or {}
@@ -1003,6 +1127,6 @@ class FundsFlowAnalyticsMixin:
             "pressure_index": kpis.get("pressure_index"),
             "regime": kpis.get("regime"),
         }
-        os.makedirs(os.path.dirname(self.snapshots_path), exist_ok=True)
-        with open(self.snapshots_path, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(_clean_json(summary), ensure_ascii=False) + "\n")
+        self.snapshot_repository.append_summary(
+            FundFlowSnapshotSummary.model_validate(_clean_json(summary))
+        )

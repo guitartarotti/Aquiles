@@ -1,9 +1,17 @@
-import sys, types, os, io
+import importlib
+import io
+import os
+import sys
+import types
+
+from dotenv import load_dotenv
+from flask import Blueprint, Flask
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 BACKEND = os.path.join(ROOT, "backend")
 sys.path.insert(0, BACKEND)
-from dotenv import load_dotenv
+
 load_dotenv(os.path.join(ROOT, ".env"), override=True)
 
 class _S(types.ModuleType):
@@ -26,26 +34,14 @@ _svc.__path__ = [os.path.join(BACKEND,"app","services")]
 _svc.__package__ = "app.services"
 sys.modules["app.services"] = _svc
 
-# Import only options blueprint to avoid graph/other deps
-from flask import Blueprint, Flask
 options_bp = Blueprint('options', __name__)
 sys.modules["app.api"] = types.ModuleType("app.api")
 sys.modules["app.api"].options_bp = options_bp
+sys.modules["app.api"].__path__ = [os.path.join(BACKEND, "app", "api")]
+sys.modules["app.api"].__package__ = "app.api"
 
-# Patch the import in options.py
-import importlib.util
-spec = importlib.util.spec_from_file_location(
-    "app.api.options",
-    os.path.join(BACKEND, "app", "api", "options.py")
-)
-mod = importlib.util.module_from_spec(spec)
-sys.modules["app.api.options"] = mod
-try:
-    spec.loader.exec_module(mod)
-    print("options.py loaded OK")
-except Exception as e:
-    print(f"ERROR loading options.py: {e}")
-    import traceback; traceback.print_exc()
+importlib.import_module("app.api.options_routes")
+print("options route package loaded OK")
 
 app = Flask('test')
 app.register_blueprint(options_bp, url_prefix='/api/options')

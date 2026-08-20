@@ -68,11 +68,44 @@ module.exports = {
         AQUILES_DISABLE_MARKET_SCREEN_COLLECTOR: '1',
         AQUILES_DISABLE_OPTIONS_VOLUME_TRACKER: '1',
         AQUILES_DISABLE_OPTIONS_COLLECTOR: '1',
+        COLLECTION_SCHEDULER_SERVICE_URL: 'http://127.0.0.1:5023',
       },
 
       // Logs
       out_file: path.join(ROOT, '.codex-run', 'backend.out.log'),
       error_file: path.join(ROOT, '.codex-run', 'backend.err.log'),
+      merge_logs: false,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    },
+
+    {
+      name: 'aquiles-collection-scheduler',
+      script: path.join(ROOT, 'scripts', 'run-collection-scheduler-service.js'),
+      cwd: ROOT,
+
+      autorestart: true,
+      watch: false,
+      max_restarts: 20,
+      restart_delay: 3000,
+      min_uptime: '20s',
+
+      env: {
+        NODE_ENV: 'production',
+        PYTHONUNBUFFERED: '1',
+        PYTHONIOENCODING: 'utf-8',
+        COLLECTION_SCHEDULER_SERVICE_HOST: '127.0.0.1',
+        COLLECTION_SCHEDULER_SERVICE_PORT: '5023',
+        CVM_CDA_ENABLE: 'True',
+        CVM_CDA_AUTO_START: 'True',
+        FUNDS_FLOW_LOCAL_ENABLE: 'True',
+        FUNDS_FLOW_LOCAL_AUTO_START: 'True',
+        MACRO_REPORT_SOURCES_ENABLE: 'True',
+        MACRO_REPORT_SOURCES_AUTO_START: 'True',
+        MACRO_INGEST_ENABLE: 'True',
+      },
+
+      out_file: path.join(ROOT, '.codex-run', 'collection-scheduler.out.log'),
+      error_file: path.join(ROOT, '.codex-run', 'collection-scheduler.err.log'),
       merge_logs: false,
       log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
@@ -429,6 +462,7 @@ module.exports = {
           'aquiles-options-model-service=4096',
           'aquiles-options-volume-tracker-service=3072',
           'aquiles-options-collector-service=3072',
+          'aquiles-collection-scheduler=4096',
           'aquiles-fair-value-markov-service=4096',
           'aquiles-cvm-cda-graph-service=4096',
           'aquiles-etf-daily-flow-service=4096',

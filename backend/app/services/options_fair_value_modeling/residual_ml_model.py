@@ -84,7 +84,7 @@ def build_residual_ml_adjustment(
     cap_points = max(current_sigma_points * run_config.residual_max_sigma_mult, 150.0)
     adjustment_points = float(np.clip(raw_adjustment_points, -cap_points, cap_points))
 
-    validation = {"observation_count": int(len(model_frame))}
+    validation: dict[str, int | float] = {"observation_count": int(len(model_frame))}
     if len(test) >= 10:
         x_test = test[ml_feature_columns].to_numpy(dtype=float)
         y_test = test["residual_return"].to_numpy(dtype=float)

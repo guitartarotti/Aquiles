@@ -460,7 +460,7 @@ class OptionsVolumeTracker:
         )
         selected_expiry_date = str(selected_monthly.get("expiry_date") or "")
 
-        for symbol, metrics in monthly_symbol_metrics.items():
+        for _symbol, metrics in monthly_symbol_metrics.items():
             expiry_date = str(metrics.get("expiry_date") or "")
             metrics["is_monthly_expiry"] = expiry_date in monthly_expiry_dates
             metrics["monthly_selected_expiry"] = expiry_date == selected_expiry_date

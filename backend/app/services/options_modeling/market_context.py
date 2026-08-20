@@ -88,10 +88,10 @@ def _load_macro_contracts() -> dict[str, Any]:
 
 def _extract_snapshot_spot(snapshot_rows: list[dict[str, Any]]) -> float | None:
     values = [_safe_float(row.get("OPT_UNDL_PX")) for row in snapshot_rows]
-    values = [value for value in values if value and value > 0]
-    if not values:
+    valid_values = [value for value in values if value is not None and value > 0]
+    if not valid_values:
         return None
-    return float(median(values))
+    return float(median(valid_values))
 
 
 def _load_excel_reference_assets() -> dict[str, Any]:

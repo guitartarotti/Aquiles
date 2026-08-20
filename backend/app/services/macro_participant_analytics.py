@@ -2,13 +2,21 @@ from __future__ import annotations
 
 import math
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from .macro_participant_math import _clamp, _parse_iso, _safe_float, _utc_now
 from .macro_thermometer_service import MacroThermometerService
 
+if TYPE_CHECKING:
+    from ..config import Config
+    from .macro_live_service import MacroStateStore
+
 
 class MacroParticipantAnalyticsMixin:
+    config: type[Config]
+    store: MacroStateStore
+    _classify_broker_origin: Callable[[Any], dict[str, Any]]
+
     def _pressure_label(self, score: float) -> str:
         if score >= 55:
             return "strong_buy_pressure"
@@ -75,7 +83,7 @@ class MacroParticipantAnalyticsMixin:
             base = 5.0
         else:
             base = 10.0
-        return base * (10 ** exponent)
+        return float(base * (10**exponent))
 
     def _resolve_backend_anchor_price(
         self,
@@ -226,8 +234,8 @@ class MacroParticipantAnalyticsMixin:
         def _bucket_price(price: float) -> float:
             return round(round(price / bin_size) * bin_size, 6)
 
-        cohort_filters = {
-            "net": lambda event: True,
+        cohort_filters: dict[str, Callable[[dict[str, Any]], bool]] = {
+            "net": lambda _event: True,
             "foreign": lambda event: bool(event.get("is_foreign_broker")),
             "retail": lambda event: bool(event.get("is_retail_broker")),
         }
@@ -495,8 +503,8 @@ class MacroParticipantAnalyticsMixin:
             total_gross = sum(abs(event["delta_quantity"]) for event in window_events)
 
             cohorts: dict[str, Any] = {}
-            cohort_filters = {
-                "net": lambda event: True,
+            cohort_filters: dict[str, Callable[[dict[str, Any]], bool]] = {
+                "net": lambda _event: True,
                 "foreign": lambda event: bool(event.get("is_foreign_broker")),
                 "retail": lambda event: bool(event.get("is_retail_broker")),
             }
@@ -759,10 +767,10 @@ class MacroParticipantAnalyticsMixin:
         primary_cohort = max(
             cohorts_payload.values(),
             key=lambda entry: (
-                priority_order.get(entry.get("regime_state"), 0),
+                priority_order.get(str(entry.get("regime_state") or ""), 0),
                 entry.get("confidence_score", 0.0),
                 abs(entry.get("pressure_score", 0.0)),
-                cohort_priority.get(entry.get("cohort"), 0),
+                cohort_priority.get(str(entry.get("cohort") or ""), 0),
             ),
         ) if cohorts_payload else None
 
@@ -1157,7 +1165,7 @@ class MacroParticipantAnalyticsMixin:
                 primary_score = cohort_primary_score
                 primary_cohort = cohort_name
                 primary_state = primary_state_local
-                primary_rationale = cohort_payload["rationale"]
+                primary_rationale = str(cohort_payload["rationale"])
 
         return {
             "bin_size": round(bin_size, 6) if raw_bin_size is not None else None,
@@ -1253,8 +1261,8 @@ class MacroParticipantAnalyticsMixin:
                 return "broad_participation"
             return "mixed_participation"
 
-        cohort_filters = {
-            "net": lambda event: True,
+        cohort_filters: dict[str, Callable[[dict[str, Any]], bool]] = {
+            "net": lambda _event: True,
             "foreign": lambda event: bool(event.get("is_foreign_broker")),
             "retail": lambda event: bool(event.get("is_retail_broker")),
         }
@@ -1388,7 +1396,7 @@ class MacroParticipantAnalyticsMixin:
             "windows": windows_payload,
         }
 
-    def _build_liquidity_intelligence_model(
+    def _build_liquidity_intelligence_model(  # noqa: C901
         self,
         assets: list[dict[str, Any]],
         cross_asset_flow_package: dict[str, Any],
@@ -1777,9 +1785,7 @@ class MacroParticipantAnalyticsMixin:
                 "windows": windows_payload,
             }
             assets_payload[asset_key] = asset_payload
-            if asset_key == "win":
-                primary_asset = asset_payload
-            elif primary_asset is None:
+            if asset_key == "win" or primary_asset is None:
                 primary_asset = asset_payload
 
         return {
@@ -1790,7 +1796,7 @@ class MacroParticipantAnalyticsMixin:
             "news_context": news_thermometer_context,
         }
 
-    def _build_liquidity_pool_model(
+    def _build_liquidity_pool_model(  # noqa: C901
         self,
         assets: list[dict[str, Any]],
         cross_asset_flow_package: dict[str, Any],
@@ -2328,9 +2334,7 @@ class MacroParticipantAnalyticsMixin:
                 "windows": windows_payload,
             }
             assets_payload[asset_key] = asset_payload
-            if asset_key == "win":
-                primary_asset = asset_payload
-            elif primary_asset is None:
+            if asset_key == "win" or primary_asset is None:
                 primary_asset = asset_payload
 
         return {
@@ -2342,7 +2346,7 @@ class MacroParticipantAnalyticsMixin:
         }
 
     def _build_cross_asset_flow_package(self, state: dict[str, Any], specs: list[dict[str, Any]]) -> dict[str, Any]:
-        assets_state = state.get("assets", {}) or {}
+        assets_state: dict[str, Any] = state.get("assets", {}) or {}
         primary_window = max(1, int(getattr(self.config, "MACRO_PARTICIPANT_PRESSURE_PRIMARY_WINDOW", 5)))
         configured_windows = sorted({
             max(1, int(value))
@@ -2365,12 +2369,13 @@ class MacroParticipantAnalyticsMixin:
         def _asset_pressure_model(spec: dict[str, Any] | None) -> dict[str, Any]:
             if not spec:
                 return {}
-            asset_state = assets_state.get(spec.get("ticker")) or {}
+            ticker = str(spec.get("ticker") or "")
+            asset_state = assets_state.get(ticker) or {}
             return self._build_pressure_model(asset_state.get("samples", []) or [])
 
         def _window_entry(model: dict[str, Any], minutes: int) -> dict[str, Any]:
             for window in model.get("windows") or []:
-                if int(window.get("minutes") or 0) == minutes:
+                if isinstance(window, dict) and int(window.get("minutes") or 0) == minutes:
                     return window
             return {}
 
@@ -2470,7 +2475,7 @@ class MacroParticipantAnalyticsMixin:
                 "wdo": abs(fx_component),
                 "di_curve": abs(rates_component),
             }
-            dominant_driver = max(driver_map, key=driver_map.get) if driver_map else "win"
+            dominant_driver = max(driver_map, key=lambda driver: driver_map[driver]) if driver_map else "win"
 
             di_legs = []
             for spec, window in di_window_entries:
@@ -3168,7 +3173,7 @@ class MacroParticipantAnalyticsMixin:
             "commentary": " ".join(part for part in commentary_parts if part).strip(),
         }
 
-    def _build_win_trade_thermometer(
+    def _build_win_trade_thermometer(  # noqa: C901
         self,
         assets: list[dict[str, Any]],
         cross_asset_flow_package: dict[str, Any],
@@ -3408,13 +3413,9 @@ class MacroParticipantAnalyticsMixin:
             conviction_score = _clamp(conviction_score, 0.0, 100.0)
 
             timing_score = 32.0
-            if bias_side == "buy" and regime_state == "initiative_break_buy":
+            if bias_side == "buy" and regime_state == "initiative_break_buy" or bias_side == "sell" and regime_state == "initiative_break_sell":
                 timing_score += 18.0
-            elif bias_side == "sell" and regime_state == "initiative_break_sell":
-                timing_score += 18.0
-            elif bias_side == "buy" and regime_state in {"responsive_rejection_buy", "divergence_buy"}:
-                timing_score += 10.0
-            elif bias_side == "sell" and regime_state in {"responsive_rejection_sell", "divergence_sell"}:
+            elif bias_side == "buy" and regime_state in {"responsive_rejection_buy", "divergence_buy"} or bias_side == "sell" and regime_state in {"responsive_rejection_sell", "divergence_sell"}:
                 timing_score += 10.0
 
             if bias_side != "neutral" and continuation_state.startswith("continuation_") and continuation_bias == bias_side:
@@ -3422,20 +3423,14 @@ class MacroParticipantAnalyticsMixin:
             if bias_side != "neutral" and continuation_state.startswith("reversal_") and continuation_bias == bias_side:
                 timing_score += 12.0
 
-            if bias_side == "buy" and level_state in {"support_defense", "rejection_below_value", "responsive_rejection"}:
-                timing_score += 14.0
-            elif bias_side == "sell" and level_state in {"resistance_defense", "rejection_above_value", "responsive_rejection"}:
+            if bias_side == "buy" and level_state in {"support_defense", "rejection_below_value", "responsive_rejection"} or bias_side == "sell" and level_state in {"resistance_defense", "rejection_above_value", "responsive_rejection"}:
                 timing_score += 14.0
             elif level_state == "accepted_value":
                 timing_score += 8.0
 
-            if bias_side == "buy" and current_position == "below_value":
+            if bias_side == "buy" and current_position == "below_value" or bias_side == "sell" and current_position == "above_value":
                 timing_score += 8.0
-            elif bias_side == "sell" and current_position == "above_value":
-                timing_score += 8.0
-            elif bias_side == "buy" and current_position == "above_value" and continuation_state == "continuation_up":
-                timing_score += 6.0
-            elif bias_side == "sell" and current_position == "below_value" and continuation_state == "continuation_down":
+            elif bias_side == "buy" and current_position == "above_value" and continuation_state == "continuation_up" or bias_side == "sell" and current_position == "below_value" and continuation_state == "continuation_down":
                 timing_score += 6.0
 
             if bias_side == "neutral":

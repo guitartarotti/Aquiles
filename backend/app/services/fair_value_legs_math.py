@@ -107,7 +107,7 @@ def _rpc_regime(score: float, slope: float, acceleration: float) -> str:
 def _pearson_corr(left: list[float], right: list[float]) -> float | None:
     pairs = [
         (float(a), float(b))
-        for a, b in zip(left, right)
+        for a, b in zip(left, right, strict=False)
         if math.isfinite(float(a)) and math.isfinite(float(b))
     ]
     if len(pairs) < 4:

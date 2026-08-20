@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Iterable
+from typing import Any, Iterable, overload
 
 SQRT_2 = math.sqrt(2.0)
 SQRT_2PI = math.sqrt(2.0 * math.pi)
@@ -28,12 +28,28 @@ def normal_pdf(value: float) -> float:
     return math.exp(-0.5 * value * value) / SQRT_2PI
 
 
+@overload
+def normalize_rate(rate: float) -> float: ...
+
+
+@overload
+def normalize_rate(rate: None) -> None: ...
+
+
 def normalize_rate(rate: float | None) -> float | None:
     if rate is None:
         return None
     if abs(rate) > 1.0:
         return rate / 100.0
     return rate
+
+
+@overload
+def normalize_vol(volatility: float) -> float: ...
+
+
+@overload
+def normalize_vol(volatility: None) -> None: ...
 
 
 def normalize_vol(volatility: float | None) -> float | None:
@@ -58,7 +74,7 @@ def linear_interpolate(x: float, points: list[tuple[float, float]]) -> float:
     if x >= ordered[-1][0]:
         return ordered[-1][1]
 
-    for left, right in zip(ordered, ordered[1:]):
+    for left, right in zip(ordered, ordered[1:], strict=False):
         x0, y0 = left
         x1, y1 = right
         if x0 <= x <= x1:

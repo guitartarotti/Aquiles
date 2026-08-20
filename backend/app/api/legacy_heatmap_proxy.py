@@ -5,6 +5,7 @@ import os
 
 import requests as http_requests
 from flask import jsonify, request
+from flask.typing import ResponseReturnValue
 
 from ..http import error_response
 
@@ -21,7 +22,7 @@ def legacy_heatmap_proxy_or_disabled(
     *,
     feature: str,
     timeout: float = 30.0,
-):
+) -> ResponseReturnValue:
     service_url = _legacy_heatmap_service_url()
     if not service_url:
         return jsonify({

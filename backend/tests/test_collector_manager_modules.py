@@ -10,7 +10,7 @@ from app.services.macro_options_heatmap_context_schedule import options_poll_int
 from app.services.macro_participant_heatmap_manager import (
     MacroParticipantHeatmapCollectorManager,
 )
-from app.startup import COLLECTORS
+from app.workers.collection_scheduler import SCHEDULED_COLLECTORS
 
 
 def test_funds_flow_schedule_parsing_and_rollover(monkeypatch) -> None:
@@ -103,13 +103,11 @@ def test_options_collector_construction_and_status_are_inert(monkeypatch) -> Non
 
 
 def test_startup_loads_funds_flow_manager_from_lifecycle_module() -> None:
-    funds_flow_spec = next(spec for spec in COLLECTORS if spec.label == "funds-flow collector")
-    assert funds_flow_spec.module == ".services.funds_flow_local_manager"
-    assert funds_flow_spec.manager_class == "FundsFlowLocalManager"
+    funds_flow_spec = next(spec for spec in SCHEDULED_COLLECTORS if spec.name == "funds_flow")
+    assert funds_flow_spec.dependency == "funds_flow_manager"
 
-    cvm_cda_spec = next(spec for spec in COLLECTORS if spec.label == "CVM CDA collector")
-    assert cvm_cda_spec.module == ".services.cvm_cda_manager"
-    assert cvm_cda_spec.manager_class == "CvmCdaManager"
+    cvm_cda_spec = next(spec for spec in SCHEDULED_COLLECTORS if spec.name == "cvm_cda")
+    assert cvm_cda_spec.dependency == "cvm_cda_manager"
 
 
 def test_options_poll_uses_fastest_configured_interval() -> None:

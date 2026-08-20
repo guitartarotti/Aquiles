@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from flask import jsonify, request
 
 from ..config import Config
+from ..container import get_container
 from ..http import error_response
 from . import options_bp
 
@@ -97,10 +98,13 @@ def _record_from_iv_payload(
     payload = dict(iv_payload or {})
     if not payload:
         return None
-    spot_value = _safe_float(
-        payload.get("spot_price") or payload.get("reference_price"),
-        0.0,
-    ) or 0.0
+    spot_value = (
+        _safe_float(
+            payload.get("spot_price") or payload.get("reference_price"),
+            0.0,
+        )
+        or 0.0
+    )
     return service.record_snapshot(
         prepared_options=[],
         market_context={"spot_price": float(spot_value), "forward_price": float(spot_value)},
@@ -135,7 +139,7 @@ def _sync_from_tracker(
     backfill_limit: int = 1,
     lookback_days: int = 2,
 ):
-    from ..services.options_volume_tracker import OptionsVolumeTracker
+    from ..services.options_store import OptionsStore
     from ..services.vol_index import VolIndexService
 
     normalized = str(underlying or "IBOVE Index").strip() or "IBOVE Index"
@@ -152,15 +156,15 @@ def _sync_from_tracker(
             or (latest_persisted or {}).get("captured_at")
         )
 
-        tracker = OptionsVolumeTracker.get_instance()
+        store = OptionsStore()
         if int(backfill_limit or 0) <= 1:
-            latest_iv = tracker.store.read_latest_volume_iv_snapshot(
+            latest_iv = store.read_latest_volume_iv_snapshot(
                 underlying_security=normalized,
                 lookback_days=max(1, int(lookback_days or 1)),
             )
             tracker_rows = [latest_iv] if latest_iv else []
         else:
-            tracker_rows = tracker.store.read_volume_iv_history(
+            tracker_rows = store.read_volume_iv_history(
                 underlying_security=normalized,
                 limit=max(int(backfill_limit) * 4, 240),
                 lookback_days=max(1, int(lookback_days or 1)),
@@ -176,12 +180,15 @@ def _sync_from_tracker(
         limit = max(1, int(backfill_limit or 1))
         latest_record = latest_persisted
         for row in pending_rows[-limit:]:
-            latest_record = _record_from_iv_payload(
-                service,
-                row,
-                date_override=str((row or {}).get("session_date") or "")[:10] or None,
-                option_count_override=(row or {}).get("chain_size"),
-            ) or latest_record
+            latest_record = (
+                _record_from_iv_payload(
+                    service,
+                    row,
+                    date_override=str((row or {}).get("session_date") or "")[:10] or None,
+                    option_count_override=(row or {}).get("chain_size"),
+                )
+                or latest_record
+            )
 
         if pending_rows and latest_record:
             state["last_completed_at"] = time.time()
@@ -242,7 +249,9 @@ def vol_index_history():
                 "history": history,
                 "daily_history": history,
                 "intraday_history": intraday_history,
-                "latest": intraday_history[-1] if intraday_history else (history[-1] if history else None),
+                "latest": intraday_history[-1]
+                if intraday_history
+                else (history[-1] if history else None),
             }
 
         _write_cache(_history_cache, cache_key, data, _HISTORY_CACHE_TTL_SECONDS)
@@ -277,7 +286,7 @@ def vol_index_collect():
         from ..services.options_modeling.input_preparation import prepare_option_inputs
         from ..services.options_modeling.market_context import build_market_context
         from ..services.options_query_service import OptionsQueryService
-        from ..services.options_volume_tracker import OptionsVolumeTracker
+        from ..services.options_store import OptionsStore
         from ..services.vol_index import VolIndexService
 
         payload = request.get_json(silent=True) or {}
@@ -298,8 +307,7 @@ def vol_index_collect():
                     }
                 )
 
-        tracker = OptionsVolumeTracker.get_instance()
-        latest_iv = tracker.store.read_latest_volume_iv_snapshot(
+        latest_iv = OptionsStore().read_latest_volume_iv_snapshot(
             underlying_security=underlying,
             lookback_days=5,
         )
@@ -325,7 +333,11 @@ def vol_index_collect():
             )
         )
 
-        tracker_result = tracker.poll_once(underlying) if needs_tracker_refresh else {}
+        tracker_result = (
+            get_container().options_volume_tracker().poll_once(underlying)
+            if needs_tracker_refresh
+            else {}
+        )
         latest_iv = tracker_result.get("monthly_iv_snapshot") or latest_iv
         if latest_iv:
             record = _record_from_iv_payload(
@@ -353,7 +365,9 @@ def vol_index_collect():
         if not rows:
             rows, batch = _merge_snapshot_tiers(query, underlying)
         if not rows:
-            return jsonify({"success": False, "error": f"No snapshot available for {underlying}"}), 404
+            return jsonify(
+                {"success": False, "error": f"No snapshot available for {underlying}"}
+            ), 404
 
         modeling = OptionsModelingService()
         try:

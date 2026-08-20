@@ -72,7 +72,7 @@ def compute_option_exposures(
 
 
 def aggregate_exposures(option_exposures: list[dict[str, Any]]) -> dict[str, Any]:
-    totals = defaultdict(float)
+    totals: defaultdict[str, float] = defaultdict(float)
     by_strike: dict[str, dict[str, Any]] = {}
     by_expiry: dict[str, dict[str, Any]] = {}
     by_put_call: dict[str, dict[str, Any]] = {}

@@ -200,7 +200,8 @@ class MacroDriverService:
             return {}
         try:
             with open(self.drivers_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                payload = json.load(f)
+            return payload if isinstance(payload, dict) else {}
         except Exception:
             logger.exception("Failed to load driver state")
             return {}
@@ -330,9 +331,7 @@ class MacroDriverService:
             return True
         if len(linked_contracts) >= 3:
             return True
-        if linked_securities:
-            return True
-        return False
+        return bool(linked_securities)
 
     def _events_are_directional_macro_cluster(self, events: List[Dict[str, Any]]) -> bool:
         return any(self._event_is_directional_macro_driver(event) for event in events)
@@ -351,7 +350,7 @@ class MacroDriverService:
         )
         candidate_events = self._candidate_events(recent_events)
         current_signature = self._current_source_signature(snapshot=snapshot, candidate_events=candidate_events)
-        return current_signature != saved_signature
+        return bool(current_signature != saved_signature)
 
     def _candidate_events(self, recent_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         candidates = []
@@ -404,18 +403,14 @@ class MacroDriverService:
                         continue
             elif scenario == "tradable_catalyst":
                 if directional_macro:
-                    if impact_score >= 5:
-                        pass
-                    elif signal_strength in {"high", "medium"} and (
+                    if impact_score >= 5 or signal_strength in {"high", "medium"} and (
                         len(event.get("linked_buckets") or []) >= 1
                         or has_links
                     ):
                         pass
                     else:
                         continue
-                elif impact_score >= 12:
-                    pass
-                elif signal_strength == "high" and len(event.get("linked_buckets") or []) >= 2:
+                elif impact_score >= 12 or signal_strength == "high" and len(event.get("linked_buckets") or []) >= 2:
                     pass
                 else:
                     continue
@@ -536,7 +531,12 @@ class MacroDriverService:
             snapshot_generated_at=snapshot.get("generated_at"),
         )
 
-        if self._can_reuse_driver(existing_driver, event_chain_signature, last_event.get("event_time"), len(sorted_events)):
+        if existing_driver is not None and self._can_reuse_driver(
+            existing_driver,
+            event_chain_signature,
+            last_event.get("event_time"),
+            len(sorted_events),
+        ):
             reused_driver = dict(existing_driver)
             reused_driver.update({
                 "price_evolution": price_evolution,
@@ -1102,12 +1102,7 @@ class MacroDriverService:
         cross_signals = (cross_asset.get("cross_signals") or {}) if isinstance(cross_asset, dict) else {}
         if float(cross_signals.get("fake_move_risk") or 0.0) >= 65:
             return True
-        if (
-            float(cross_signals.get("confirmation_ratio") or 100.0) <= 35.0
-            and abs(float(cross_asset.get("general_score") or 0.0)) >= 8.0
-        ):
-            return True
-        return False
+        return bool(float(cross_signals.get("confirmation_ratio") or 100.0) <= 35.0 and abs(float(cross_asset.get("general_score") or 0.0)) >= 8.0)
 
     def _expected_impact_payload(
         self,
@@ -1131,7 +1126,7 @@ class MacroDriverService:
         )
         raw_score = ai_analysis.get("expected_impact_score")
         try:
-            score = int(float(raw_score))
+            score = int(float(raw_score if raw_score is not None else fallback["score"]))
         except (TypeError, ValueError):
             score = fallback["score"]
         score = int(round((fallback["score"] * 0.7) + (score * 0.3)))
@@ -1500,21 +1495,19 @@ class MacroDriverService:
         if not di_focus:
             if "curve_short" in focus_buckets and Config.MACRO_CURVE_SHORT_TICKERS:
                 di_focus = Config.MACRO_CURVE_SHORT_TICKERS[0]
-            elif "curve_long" in focus_buckets and Config.MACRO_CURVE_LONG_TICKERS:
-                di_focus = Config.MACRO_CURVE_LONG_TICKERS[0]
-            elif Config.MACRO_CURVE_LONG_TICKERS:
+            elif "curve_long" in focus_buckets and Config.MACRO_CURVE_LONG_TICKERS or Config.MACRO_CURVE_LONG_TICKERS:
                 di_focus = Config.MACRO_CURVE_LONG_TICKERS[0]
             elif Config.MACRO_CURVE_SHORT_TICKERS:
                 di_focus = Config.MACRO_CURVE_SHORT_TICKERS[0]
 
-        probes = [
-            {"key": "win", "label": "WIN", "ticker": (Config.MACRO_INDEX_TICKERS or [None])[0]},
-            {"key": "wdo", "label": "WDO", "ticker": (Config.MACRO_DOLLAR_TICKERS or [None])[0]},
-            {"key": "di", "label": "DI", "ticker": di_focus},
+        probes: List[Dict[str, str]] = [
+            {"key": "win", "label": "WIN", "ticker": str((Config.MACRO_INDEX_TICKERS or [""])[0] or "")},
+            {"key": "wdo", "label": "WDO", "ticker": str((Config.MACRO_DOLLAR_TICKERS or [""])[0] or "")},
+            {"key": "di", "label": "DI", "ticker": str(di_focus or "")},
         ]
 
-        seen = set()
-        normalized = []
+        seen: set[str] = set()
+        normalized: List[Dict[str, str]] = []
         for item in probes:
             ticker = str(item.get("ticker") or "").strip()
             if not ticker or ticker in seen:
@@ -1701,13 +1694,13 @@ class MacroDriverService:
         asset_asymmetry: List[Dict[str, Any]],
         participant_reactions: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        nodes = [
+        nodes: List[Dict[str, str]] = [
             {"id": driver_id, "label": title, "type": "driver"},
         ]
-        edges = []
+        edges: List[Dict[str, str]] = []
 
         for update in updates[:6]:
-            event_id = update.get("event_id")
+            event_id = str(update.get("event_id") or "")
             nodes.append({
                 "id": event_id,
                 "label": unescape(str(update.get("headline") or ""))[:88],
@@ -1719,7 +1712,7 @@ class MacroDriverService:
             asset_id = f"asset::{asset.get('asset')}"
             nodes.append({
                 "id": asset_id,
-                "label": asset.get("asset"),
+                "label": str(asset.get("asset") or ""),
                 "type": "asset",
             })
             edges.append({"source": driver_id, "target": asset_id, "relation": f"impacts::{asset.get('bias')}"})
@@ -1728,7 +1721,7 @@ class MacroDriverService:
             participant_id = f"broker::{participant.get('broker_name')}"
             nodes.append({
                 "id": participant_id,
-                "label": participant.get("broker_name"),
+                "label": str(participant.get("broker_name") or ""),
                 "type": "participant",
             })
             edges.append({"source": driver_id, "target": participant_id, "relation": f"moves::{participant.get('market_bias')}"})
@@ -1940,7 +1933,10 @@ class MacroDriverService:
         fallback_consensus_confidence = int(fallback.get("directional_consensus_confidence") or 0)
 
         try:
-            normalized["expected_impact_score"] = int(float(normalized.get("expected_impact_score")))
+            raw_impact_score = normalized.get("expected_impact_score")
+            normalized["expected_impact_score"] = int(
+                float(raw_impact_score if raw_impact_score is not None else 0)
+            )
         except (TypeError, ValueError):
             normalized["expected_impact_score"] = fallback.get("expected_impact_score")
 
@@ -2423,7 +2419,7 @@ class MacroDriverService:
         context_packet: Optional[Dict[str, Any]] = None,
     ) -> str:
         headlines = "; ".join(unescape(str(item.get("headline") or "")) for item in events[:3])
-        top_assets = ", ".join(item.get("asset") for item in asset_asymmetry[:3])
+        top_assets = ", ".join(str(item.get("asset")) for item in asset_asymmetry[:3] if item.get("asset"))
         semantic_summary = (((context_packet or {}).get("semantic") or {}).get("aggregate_summary")) or ""
         return (
             f"Simulate the market around driver {primary_asset or 'macro'} with headlines [{headlines}] "

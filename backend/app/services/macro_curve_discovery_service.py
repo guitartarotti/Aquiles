@@ -568,7 +568,9 @@ class MacroCurveDiscoveryService:
                 payload = json.load(handle)
             captured_at = pd.to_datetime(payload.get("captured_at"), utc=True, errors="coerce")
             if pd.notna(captured_at):
-                return captured_at.tz_convert(LOCAL_TZ).date()
+                parsed_date = captured_at.tz_convert(LOCAL_TZ).date()
+                if isinstance(parsed_date, date):
+                    return parsed_date
         except Exception:
             pass
 
@@ -1031,16 +1033,16 @@ class MacroCurveDiscoveryService:
 
         weights = [1.0 for _ in clean]
         weight_sum = sum(weights)
-        x_bar = sum(weight * item[0] for weight, item in zip(weights, clean)) / weight_sum
-        y_bar = sum(weight * item[1] for weight, item in zip(weights, clean)) / weight_sum
+        x_bar = sum(weight * item[0] for weight, item in zip(weights, clean, strict=False)) / weight_sum
+        y_bar = sum(weight * item[1] for weight, item in zip(weights, clean, strict=False)) / weight_sum
 
-        variance = sum(weight * (item[0] - x_bar) ** 2 for weight, item in zip(weights, clean))
+        variance = sum(weight * (item[0] - x_bar) ** 2 for weight, item in zip(weights, clean, strict=False))
         if variance <= 1e-12:
             return None
 
         covariance = sum(
             weight * (item[0] - x_bar) * (item[1] - y_bar)
-            for weight, item in zip(weights, clean)
+            for weight, item in zip(weights, clean, strict=False)
         )
         slope = covariance / variance
         intercept = y_bar - slope * x_bar

@@ -6,7 +6,7 @@ import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, TypeVar, cast
 from zoneinfo import ZoneInfo
 
 from ..config import Config
@@ -31,8 +31,11 @@ def _now_iso() -> str:
     return _utc_now().isoformat()
 
 
-def _deep_copy_json(value: Any) -> Any:
-    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+T = TypeVar("T")
+
+
+def _deep_copy_json(value: T) -> T:
+    return cast(T, json.loads(json.dumps(value, ensure_ascii=False, default=str)))
 
 
 def _parse_iso(value: Any) -> datetime | None:
@@ -888,16 +891,16 @@ class MacroOptionsHeatmapContextService:
         best_archive: dict[str, Any] | None = None
         best_archive_dt: datetime | None = None
         for session_date in archive_sessions:
-            candidate = self._load_live_capture_archive_latest_workbook_value_unlocked(
+            archive_candidate = self._load_live_capture_archive_latest_workbook_value_unlocked(
                 session_date=session_date,
                 underlying_security=underlying_security,
                 security=security,
             )
-            if not candidate:
+            if not archive_candidate:
                 continue
-            candidate_dt = _parse_iso(candidate.get("captured_at"))
+            candidate_dt = _parse_iso(archive_candidate.get("captured_at"))
             if best_archive is None or (candidate_dt and (best_archive_dt is None or candidate_dt >= best_archive_dt)):
-                best_archive = candidate
+                best_archive = archive_candidate
                 best_archive_dt = candidate_dt
 
         if best_state and best_archive:
@@ -1333,15 +1336,21 @@ class MacroOptionsHeatmapContextService:
         if len(anchors) < 3:
             return sample
 
-        future_values = [_finite_float(item.get("current_future_price")) for item in anchors]
-        future_values = [value for value in future_values if value is not None]
+        future_values = [
+            value
+            for item in anchors
+            if (value := _finite_float(item.get("current_future_price"))) is not None
+        ]
         future_median = _median(future_values)
         future_mad = _median_abs_deviation(future_values, future_median)
         if future_median is None:
             return sample
 
-        basis_values = [_finite_float(item.get("live_basis_points")) for item in anchors]
-        basis_values = [value for value in basis_values if value is not None]
+        basis_values = [
+            value
+            for item in anchors
+            if (value := _finite_float(item.get("live_basis_points"))) is not None
+        ]
         basis_median = _median(basis_values)
         basis_mad = _median_abs_deviation(basis_values, basis_median) if basis_values else None
 
@@ -1454,9 +1463,7 @@ class MacroOptionsHeatmapContextService:
                 return True
             if previous_timestamp is not None and current_timestamp < previous_timestamp - timedelta(seconds=1):
                 return True
-            if captured_at is not None and (captured_at - current_timestamp) > staleness_cutoff:
-                return True
-            return False
+            return bool(captured_at is not None and captured_at - current_timestamp > staleness_cutoff)
 
         for factor, current_payload in current_factor_values.items():
             current_value = self._normalize_value_payload(
@@ -1691,13 +1698,16 @@ class MacroOptionsHeatmapContextService:
         stabilized["current_spot_timestamp"] = previous_sample.get("current_spot_timestamp")
 
         if future_delta is not None and abs(future_delta) > 1e-9:
-            if _finite_float(stabilized.get("quality_adjusted_fair_value_xb1")) is not None:
-                stabilized["quality_adjusted_fair_value_xb1"] = _finite_float(stabilized.get("quality_adjusted_fair_value_xb1")) + future_delta
+            quality_adjusted_value = _finite_float(stabilized.get("quality_adjusted_fair_value_xb1"))
+            if quality_adjusted_value is not None:
+                stabilized["quality_adjusted_fair_value_xb1"] = quality_adjusted_value + future_delta
             quality_ribbon = dict(stabilized.get("quality_ribbon") or {})
-            if _finite_float(quality_ribbon.get("upper")) is not None:
-                quality_ribbon["upper"] = _finite_float(quality_ribbon.get("upper")) + future_delta
-            if _finite_float(quality_ribbon.get("lower")) is not None:
-                quality_ribbon["lower"] = _finite_float(quality_ribbon.get("lower")) + future_delta
+            upper_value = _finite_float(quality_ribbon.get("upper"))
+            if upper_value is not None:
+                quality_ribbon["upper"] = upper_value + future_delta
+            lower_value = _finite_float(quality_ribbon.get("lower"))
+            if lower_value is not None:
+                quality_ribbon["lower"] = lower_value + future_delta
             if quality_ribbon:
                 stabilized["quality_ribbon"] = quality_ribbon
 
@@ -1768,9 +1778,7 @@ class MacroOptionsHeatmapContextService:
             keep = False
             if sample_dt is None:
                 keep = index >= max(len(samples) - 240, 0)
-            elif sample_dt >= recent_cutoff:
-                keep = True
-            elif index % 15 == 0:
+            elif sample_dt >= recent_cutoff or index % 15 == 0:
                 keep = True
             if keep:
                 compressed.append(_deep_copy_json(sample))
@@ -2387,8 +2395,12 @@ class MacroOptionsHeatmapContextService:
             high_spot = _finite_float(band_payload.get("high"))
             if low_spot is None and high_spot is None:
                 continue
-            low_price = (low_spot if low_spot is not None else high_spot) + (basis_points or 0.0)
-            high_price = (high_spot if high_spot is not None else low_spot) + (basis_points or 0.0)
+            resolved_low_spot = low_spot if low_spot is not None else high_spot
+            resolved_high_spot = high_spot if high_spot is not None else low_spot
+            if resolved_low_spot is None or resolved_high_spot is None:
+                continue
+            low_price = resolved_low_spot + (basis_points or 0.0)
+            high_price = resolved_high_spot + (basis_points or 0.0)
             center = (low_price + high_price) / 2.0
             _append_special_region(
                 band_key,
@@ -2739,7 +2751,7 @@ class MacroOptionsHeatmapContextService:
                 live_snapshot: dict[str, Any] | None = None
                 if self._should_capture_live_snapshot(state, local_now, force=force_fair_value):
                     state, live_snapshot = self._capture_live_workbook_snapshot(state, primary_underlying)
-                    if self._is_valid_live_snapshot(live_snapshot):
+                    if isinstance(live_snapshot, dict) and self._is_valid_live_snapshot(live_snapshot):
                         collector["last_live_snapshot_at"] = live_snapshot.get("captured_at")
                         collector["last_error"] = None
                         collector["last_completed_at"] = _now_iso()
@@ -2764,7 +2776,7 @@ class MacroOptionsHeatmapContextService:
                         live_snapshot = dict(
                             ((state.get("live_capture_history") or {}).get("latest_snapshot") or {})
                         )
-                    if self._is_valid_live_snapshot(live_snapshot):
+                    if isinstance(live_snapshot, dict) and self._is_valid_live_snapshot(live_snapshot):
                         state = self._project_fair_value_sample_from_snapshot(state, primary_underlying, live_snapshot)
                         collector["last_projection_completed_at"] = _now_iso()
                         collector["last_projection_error"] = None

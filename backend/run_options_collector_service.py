@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
+from typing import Any
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -36,8 +38,7 @@ from app.utils.logger import get_logger
 logger = get_logger("aquiles.options_collector_service")
 
 app = Flask(__name__)
-if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
-    app.json.ensure_ascii = False
+setattr(app.json, "ensure_ascii", False)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 register_auth(app)
 register_error_handlers(app)
@@ -45,11 +46,17 @@ register_error_handlers(app)
 collector = OptionsCollectorManager.get_instance()
 
 
-def _json_error(exc: Exception, status_code: int = 500):
+def _json_error(exc: Exception, status_code: int = 500) -> Any:
     return error_response(logger, status_code=status_code, exception=exc)
 
 
-def _run_async_task(task_type: str, metadata: dict, message: str, completed_message: str, fn):
+def _run_async_task(
+    task_type: str,
+    metadata: dict[str, Any],
+    message: str,
+    completed_message: str,
+    fn: Callable[[], dict[str, Any]],
+) -> Any:
     task_manager = TaskManager()
     task_id = task_manager.create_task(task_type, metadata=metadata)
 
@@ -85,7 +92,7 @@ def _run_async_task(task_type: str, metadata: dict, message: str, completed_mess
 
 
 @app.route("/health", methods=["GET"])
-def health():
+def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "aquiles-options-collector-service",
@@ -94,7 +101,7 @@ def health():
 
 
 @app.route("/api/options/collector/status", methods=["GET"])
-def options_collector_status():
+def options_collector_status() -> Any:
     try:
         return jsonify({"success": True, "data": collector.status()})
     except Exception as exc:
@@ -103,7 +110,7 @@ def options_collector_status():
 
 @app.route("/api/options/collector/start", methods=["POST"])
 @require_role("admin")
-def start_options_collector():
+def start_options_collector() -> Any:
     try:
         return jsonify({"success": True, "data": collector.start()})
     except Exception as exc:
@@ -112,7 +119,7 @@ def start_options_collector():
 
 @app.route("/api/options/collector/stop", methods=["POST"])
 @require_role("admin")
-def stop_options_collector():
+def stop_options_collector() -> Any:
     try:
         return jsonify({"success": True, "data": collector.stop()})
     except Exception as exc:
@@ -120,16 +127,17 @@ def stop_options_collector():
 
 
 @app.route("/api/options/collect", methods=["POST"])
-def collect_options_once():
+def collect_options_once() -> Any:
     try:
-        payload = request.get_json(silent=True) or {}
+        raw_payload = request.get_json(silent=True)
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
         include_structural = bool(payload.get("include_structural", True))
         include_liquid = bool(payload.get("include_liquid", True))
         include_critical = bool(payload.get("include_critical", True))
         include_ticks = payload.get("include_ticks")
         run_async = bool(payload.get("async", True))
 
-        def execute():
+        def execute() -> dict[str, Any]:
             return collector.collect_once(
                 include_structural=include_structural,
                 include_liquid=include_liquid,
@@ -157,10 +165,11 @@ def collect_options_once():
 
 
 @app.route("/api/options/history/update", methods=["POST"])
-def update_options_history():
+def update_options_history() -> Any:
     try:
-        payload = request.get_json(silent=True) or {}
-        underlying = payload.get("underlying_security") or "IBOVE Index"
+        raw_payload = request.get_json(silent=True)
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
+        underlying = str(payload.get("underlying_security") or "IBOVE Index")
         trade_date = payload.get("trade_date")
         max_contracts = payload.get("max_contracts")
         force = bool(payload.get("force", False))
@@ -176,7 +185,7 @@ def update_options_history():
 
 
 @app.route("/api/options/jobs/<task_id>", methods=["GET"])
-def get_options_task(task_id: str):
+def get_options_task(task_id: str) -> Any:
     task = TaskManager().get_task(task_id)
     if not task:
         return jsonify({"success": False, "error": f"Task not found: {task_id}"}), 404
