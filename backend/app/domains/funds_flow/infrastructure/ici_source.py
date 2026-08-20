@@ -431,7 +431,7 @@ class IciFundsFlowAdapter(CachedHttpSource):
                 return handle.read()
         response = requests.get(url, timeout=max(self.timeout_seconds, 45))
         response.raise_for_status()
-        text = response.text
+        text: str = response.text
         temp_path = f"{cache_path}.tmp"
         with open(temp_path, "w", encoding="utf-8") as handle:
             handle.write(text)
