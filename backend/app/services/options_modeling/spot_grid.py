@@ -27,9 +27,9 @@ def reprice_grid(
     curve: list[dict[str, Any]] = []
 
     for spot in grid:
-        by_expiry = defaultdict(lambda: {"dex": 0.0, "gex": 0.0, "vex": 0.0, "cex": 0.0})
-        by_put_call = defaultdict(lambda: {"dex": 0.0, "gex": 0.0, "vex": 0.0, "cex": 0.0})
-        by_moneyness_bucket = defaultdict(lambda: {"dex": 0.0, "gex": 0.0, "vex": 0.0, "cex": 0.0})
+        by_expiry: defaultdict[str, dict[str, float]] = defaultdict(lambda: {"dex": 0.0, "gex": 0.0, "vex": 0.0, "cex": 0.0})
+        by_put_call: defaultdict[str, dict[str, float]] = defaultdict(lambda: {"dex": 0.0, "gex": 0.0, "vex": 0.0, "cex": 0.0})
+        by_moneyness_bucket: defaultdict[str, dict[str, float]] = defaultdict(lambda: {"dex": 0.0, "gex": 0.0, "vex": 0.0, "cex": 0.0})
         totals = {"dex": 0.0, "gex": 0.0, "vex": 0.0, "cex": 0.0}
 
         for option in options:

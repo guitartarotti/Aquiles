@@ -12,7 +12,7 @@ import signal
 import sys
 import threading
 import time
-
+from types import FrameType
 
 if sys.platform == "win32":
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
@@ -26,7 +26,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app.services.market_screen_capture_service import MarketScreenCaptureCollectorManager
 from app.utils.logger import get_logger
 
-
 logger = get_logger("aquiles.market_screen_worker")
 
 
@@ -35,7 +34,8 @@ def main() -> None:
     stop_event = threading.Event()
     manager = MarketScreenCaptureCollectorManager.get_instance()
 
-    def request_stop(signum=None, frame=None) -> None:
+    def request_stop(signum: int | None = None, frame: FrameType | None = None) -> None:
+        del frame
         logger.info("Stopping market screen worker signal=%s", signum)
         stop_event.set()
         try:

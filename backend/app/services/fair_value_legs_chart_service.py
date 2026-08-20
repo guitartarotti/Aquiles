@@ -345,7 +345,7 @@ class FairValueLegsChartService(FairValueLegsModelMixin):
         shadow_value = _mean(shadow_prices)
 
         template = deepcopy(rows[-1])
-        for index, row in enumerate(rows):
+        for _index, row in enumerate(rows):
             if str(row.get("session_date") or "") != latest_session:
                 continue
             row_ts = pd.to_datetime(row.get("timestamp"), utc=True, errors="coerce")
@@ -635,7 +635,7 @@ class FairValueLegsChartService(FairValueLegsModelMixin):
         shadow_value = _mean(shadow_prices)
 
         template = deepcopy(rows[-1])
-        for index, row in enumerate(rows):
+        for _index, row in enumerate(rows):
             if str(row.get("session_date") or "") != latest_session:
                 continue
             row_ts = pd.to_datetime(row.get("timestamp"), utc=True, errors="coerce")

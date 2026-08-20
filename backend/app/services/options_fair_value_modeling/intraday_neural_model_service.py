@@ -4,7 +4,7 @@ import math
 from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -21,8 +21,8 @@ try:
     import torch
     from torch import nn
 except Exception:  # pragma: no cover - handled at runtime
-    torch = None
-    nn = None
+    torch = cast(Any, None)
+    nn = cast(Any, None)
 
 
 logger = get_logger("aquiles.options_fair_value.intraday_neural")
@@ -91,11 +91,11 @@ class _NeuralAdditiveModel(nn.Module):
 
     def forward(
         self,
-        factor_inputs,
-        context_inputs=None,
+        factor_inputs: Any,
+        context_inputs: Any = None,
         *,
         return_contributions: bool = False,
-    ):
+    ) -> Any:
         contributions = []
         for index, block in enumerate(self.factor_nets):
             scalar = factor_inputs[:, index:index + 1]
@@ -356,7 +356,7 @@ class IntradayNeuralModelService:
         if not transformed:
             return np.zeros((len(frame.index), 0), dtype=float)
         matrix = np.column_stack(transformed)
-        return np.nan_to_num(matrix, nan=0.0, posinf=0.0, neginf=0.0)
+        return np.asarray(np.nan_to_num(matrix, nan=0.0, posinf=0.0, neginf=0.0), dtype=float)
 
     @staticmethod
     def _split_train_test(dataset: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -415,7 +415,7 @@ class IntradayNeuralModelService:
     @staticmethod
     def _build_sample_weights(frame: pd.DataFrame) -> np.ndarray:
         coverage = pd.to_numeric(frame["coverage_ratio"], errors="coerce").fillna(0.0).to_numpy(dtype=float)
-        return np.clip(0.25 + (0.75 * coverage), 0.25, 1.0)
+        return np.asarray(np.clip(0.25 + (0.75 * coverage), 0.25, 1.0), dtype=float)
 
     @staticmethod
     def _select_trainable_factors(
@@ -596,7 +596,10 @@ class IntradayNeuralModelService:
             return_contributions=True,
         )
         latest_pred_tensor.backward(torch.ones_like(latest_pred_tensor))
-        latest_gradients = latest_factor_tensor.grad.detach().cpu().numpy()[0]
+        latest_gradient_tensor = latest_factor_tensor.grad
+        if latest_gradient_tensor is None:
+            raise RuntimeError("Neural factor gradient was not produced")
+        latest_gradients = latest_gradient_tensor.detach().cpu().numpy()[0]
         latest_factor_contrib = latest_factor_contrib_tensor.detach().cpu().numpy()[0]
         latest_context_contrib = (
             float(latest_context_contrib_tensor.detach().cpu().numpy()[0][0])
@@ -655,7 +658,7 @@ class IntradayNeuralModelService:
             return rows
         tail = dataset.tail(min(len(y_pred_test), history_limit)).copy()
         pred_tail = y_pred_test[-len(tail.index):]
-        for (_, row), pred in zip(tail.iterrows(), pred_tail):
+        for (_, row), pred in zip(tail.iterrows(), pred_tail, strict=False):
             xb1_last = _safe_float(row.get("xb1_last"), 0.0) or 0.0
             rows.append({
                 "timestamp": row.get("timestamp").isoformat() if hasattr(row.get("timestamp"), "isoformat") else row.get("timestamp"),

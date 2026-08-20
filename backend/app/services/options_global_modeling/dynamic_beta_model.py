@@ -68,7 +68,7 @@ def _ewma_covariance(x_values: list[float], y_values: list[float], alpha: float)
     mean_x = x_values[0]
     mean_y = y_values[0]
     cov = 0.0
-    for x_value, y_value in zip(x_values, y_values):
+    for x_value, y_value in zip(x_values, y_values, strict=False):
         mean_x = (alpha * x_value) + ((1.0 - alpha) * mean_x)
         mean_y = (alpha * y_value) + ((1.0 - alpha) * mean_y)
         cov = (alpha * ((x_value - mean_x) * (y_value - mean_y))) + ((1.0 - alpha) * cov)
@@ -80,7 +80,7 @@ def _pearson_corr(x_values: list[float], y_values: list[float]) -> float:
         return 0.0
     mean_x = sum(x_values) / len(x_values)
     mean_y = sum(y_values) / len(y_values)
-    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(x_values, y_values))
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(x_values, y_values, strict=False))
     var_x = sum((x - mean_x) ** 2 for x in x_values)
     var_y = sum((y - mean_y) ** 2 for y in y_values)
     if var_x <= 0 or var_y <= 0:

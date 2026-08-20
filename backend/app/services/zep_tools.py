@@ -672,7 +672,7 @@ class ZepToolsService:
                 # 按分数排序
                 scored_edges.sort(key=lambda x: x[0], reverse=True)
                 
-                for score, edge in scored_edges[:limit]:
+                for _score, edge in scored_edges[:limit]:
                     if edge.fact:
                         facts.append(edge.fact)
                     edges_result.append({
@@ -694,7 +694,7 @@ class ZepToolsService:
                 
                 scored_nodes.sort(key=lambda x: x[0], reverse=True)
                 
-                for score, node in scored_nodes[:limit]:
+                for _score, node in scored_nodes[:limit]:
                     nodes_result.append({
                         "uuid": node.uuid,
                         "name": node.name,

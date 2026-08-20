@@ -13,8 +13,8 @@
   "include": [
     "src/auth/session.js",
     "src/utils/discoveryLayout.js",
-    "src/utils/fundsFlowFormatters.js",
-    "src/utils/fundsFlowSourceStatus.js",
+    "src/features/funds-flow/models/formatters.js",
+    "src/features/funds-flow/models/sourceStatus.js",
     "src/utils/marketFormatters.js"
   ]
 }

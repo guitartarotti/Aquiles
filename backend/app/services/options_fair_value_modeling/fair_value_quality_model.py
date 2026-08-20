@@ -3,9 +3,15 @@ from __future__ import annotations
 import math
 import statistics
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypedDict
 
-DI_CURVE_REFERENCE_ASSETS = [
+
+class ReferenceAsset(TypedDict):
+    security: str
+    label: str
+    tenor: float
+
+DI_CURVE_REFERENCE_ASSETS: tuple[ReferenceAsset, ...] = (
     {"security": "ODF27 Comdty", "label": "F27", "tenor": 27.0},
     {"security": "ODF28 Comdty", "label": "F28", "tenor": 28.0},
     {"security": "ODF29 Comdty", "label": "F29", "tenor": 29.0},
@@ -14,14 +20,14 @@ DI_CURVE_REFERENCE_ASSETS = [
     {"security": "ODF32 Comdty", "label": "F32", "tenor": 32.0},
     {"security": "ODF33 Comdty", "label": "F33", "tenor": 33.0},
     {"security": "ODF35 Comdty", "label": "F35", "tenor": 35.0},
-]
+)
 
-BR_IMPLIED_INFLATION_REFERENCE_ASSETS = [
+BR_IMPLIED_INFLATION_REFERENCE_ASSETS: tuple[ReferenceAsset, ...] = (
     {"security": ".BRII1Y Index", "label": "BRII 1Y", "tenor": 1.0},
     {"security": ".BRII2Y Index", "label": "BRII 2Y", "tenor": 2.0},
     {"security": ".BRII5Y Index", "label": "BRII 5Y", "tenor": 5.0},
     {"security": ".BRII10Y Index", "label": "BRII 10Y", "tenor": 10.0},
-]
+)
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -263,9 +269,10 @@ def _build_curve_regime_summary(
         if short_change is not None and long_change is not None
         else _feature_delta_from_row(rows_by_factor.get("di_slope"))
     )
+    curve_edge_change = _mean_optional([short_change, long_change])
     twist_change = (
-        (belly_change - _mean_optional([short_change, long_change]))
-        if belly_change is not None and short_change is not None and long_change is not None
+        belly_change - curve_edge_change
+        if belly_change is not None and curve_edge_change is not None
         else _feature_delta_from_row(rows_by_factor.get("di_twist"))
     )
     fiscal_change = (

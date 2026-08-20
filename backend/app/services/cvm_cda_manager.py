@@ -22,8 +22,8 @@ class CvmCdaManager:
     _instance: "CvmCdaManager | None" = None
     _instance_lock = threading.Lock()
 
-    def __init__(self) -> None:
-        self.service = CvmCdaService()
+    def __init__(self, service: CvmCdaService | None = None) -> None:
+        self.service = service or CvmCdaService()
         self.root_dir = self.service.root_dir
         self.state_path = self.root_dir / "collector_status.json"
         self._runtime_lock = threading.RLock()
@@ -45,7 +45,9 @@ class CvmCdaManager:
                 self._save_status(desired_running=True, running=True)
                 return self.status()
             self._stop_event = threading.Event()
-            self._thread = threading.Thread(target=self._run_loop, daemon=True, name="cvm-cda-seasonal")
+            self._thread = threading.Thread(
+                target=self._run_loop, daemon=True, name="cvm-cda-seasonal"
+            )
             self._thread.start()
             self._save_status(
                 desired_running=True,
@@ -87,19 +89,21 @@ class CvmCdaManager:
     def resume_if_needed(self) -> dict[str, Any]:
         state = self._read_status()
         should_run = bool(getattr(Config, "CVM_CDA_ENABLE", True)) and (
-            bool(getattr(Config, "CVM_CDA_AUTO_START", False))
-            or bool(state.get("desired_running"))
+            bool(getattr(Config, "CVM_CDA_AUTO_START", False)) or bool(state.get("desired_running"))
         )
         if should_run:
             return self.start()
         return self.status()
 
-    def collect_once(self, *, force: bool = False, lookback_months: int | None = None) -> dict[str, Any]:
+    def collect_once(
+        self, *, force: bool = False, lookback_months: int | None = None
+    ) -> dict[str, Any]:
         self._save_status(last_started_at=_utc_now(), last_error=None)
         try:
             result = self.service.ingest_latest(
                 force=force,
-                lookback_months=lookback_months or int(getattr(Config, "CVM_CDA_RECENT_MONTH_LOOKBACK", 3)),
+                lookback_months=lookback_months
+                or int(getattr(Config, "CVM_CDA_RECENT_MONTH_LOOKBACK", 3)),
             )
             completed_at = _utc_now()
             self._save_status(
@@ -160,7 +164,9 @@ class CvmCdaManager:
         raw = str(getattr(Config, "CVM_CDA_UPDATE_TIME", "08:25") or "08:25")
         try:
             hour_text, minute_text = raw.split(":", 1)
-            return dt_time(hour=max(0, min(int(hour_text), 23)), minute=max(0, min(int(minute_text[:2]), 59)))
+            return dt_time(
+                hour=max(0, min(int(hour_text), 23)), minute=max(0, min(int(minute_text[:2]), 59))
+            )
         except Exception:
             return dt_time(hour=8, minute=25)
 

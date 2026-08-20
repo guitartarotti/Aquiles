@@ -250,7 +250,7 @@ def build_nonlinear_dependence(
         }
 
     total_weight = 0.0
-    aggregate = {
+    aggregate: dict[str, float] = {
         "pearson_corr": 0.0,
         "spearman_corr": 0.0,
         "kendall_tau": 0.0,
@@ -266,13 +266,14 @@ def build_nonlinear_dependence(
     for metric in weighted_metrics:
         weight = max(float(metric.get("dependence_confidence") or 0.0), 0.05)
         total_weight += weight
-        for key in aggregate.keys():
+        for key in aggregate:
             aggregate[key] += weight * float(metric.get(key) or 0.0)
         if float(metric.get("lead_lag_score") or 0.0) >= best_lag_score:
             best_lag_score = float(metric.get("lead_lag_score") or 0.0)
             best_lag_minutes = int(metric.get("best_lag_minutes") or 0)
-    for key in aggregate.keys():
+    for key in aggregate:
         aggregate[key] = aggregate[key] / max(total_weight, 1e-9)
-    aggregate["best_lag_minutes"] = best_lag_minutes
-    aggregate["windows"] = windows
-    return aggregate
+    result: dict[str, Any] = dict(aggregate)
+    result["best_lag_minutes"] = best_lag_minutes
+    result["windows"] = windows
+    return result

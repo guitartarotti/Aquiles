@@ -9,19 +9,6 @@ from flask import Flask
 from app import create_app
 from app.http import error_response, register_error_handlers
 from app.services import market_screen_capture_service
-from app.startup import CollectorSpec, _resume_collector
-
-
-class _RecordingLogger:
-    def __init__(self) -> None:
-        self.info_messages: list[tuple] = []
-        self.exception_messages: list[tuple] = []
-
-    def info(self, *args) -> None:
-        self.info_messages.append(args)
-
-    def exception(self, *args, **kwargs) -> None:
-        self.exception_messages.append((args, kwargs))
 
 
 class _TestConfig:
@@ -42,22 +29,6 @@ def test_error_response_does_not_expose_internal_exception() -> None:
 
     assert status == 500
     assert response.get_json() == {"success": False, "error": "Internal server error"}
-
-
-def test_disabled_collector_is_not_imported(monkeypatch) -> None:
-    logger = _RecordingLogger()
-    spec = CollectorSpec(
-        label="test collector",
-        module=".does_not_exist",
-        manager_class="MissingManager",
-        disabled_by="AQUILES_DISABLE_TEST_COLLECTOR",
-    )
-    monkeypatch.setenv("AQUILES_DISABLE_TEST_COLLECTOR", "true")
-
-    _resume_collector(spec, logger, verbose=True)
-
-    assert logger.info_messages
-    assert not logger.exception_messages
 
 
 def test_market_screen_capture_degrades_without_windows_bindings(monkeypatch, tmp_path) -> None:

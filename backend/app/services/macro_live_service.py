@@ -1,4 +1,4 @@
-﻿"""
+"""
 Macro live feed collection, storage, and project sync helpers.
 """
 
@@ -13,7 +13,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, TypeVar, cast
 from zoneinfo import ZoneInfo
 
 import requests
@@ -24,7 +24,7 @@ from ..models.project import ProjectManager, ProjectStatus
 from ..utils.logger import get_logger
 from .bloomberg_desktop_service import BloombergDesktopService
 
-logger = get_logger('aquiles.macro_live')
+logger = get_logger("aquiles.macro_live")
 EVENT_CLASSIFICATION_VERSION = "macro-headline-freeze-v5-contextual-scope"
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -37,8 +37,11 @@ def _now_iso() -> str:
     return _utc_now().isoformat()
 
 
-def _deep_copy_json(data: Any) -> Any:
-    return json.loads(json.dumps(data, ensure_ascii=False))
+T = TypeVar("T")
+
+
+def _deep_copy_json(data: T) -> T:
+    return cast(T, json.loads(json.dumps(data, ensure_ascii=False)))
 
 
 def _iso_from_timestamp(value: Any) -> str | None:
@@ -125,11 +128,28 @@ MACRO_NEWS_KEYWORDS = {
     "BBDC4": ["bradesco", "bbdc4"],
 }
 
-MACRO_THEME_RULES = {
+MACRO_THEME_RULES: dict[str, dict[str, Any]] = {
     "ormuz_blockade": {
         "keyword_groups": [
             ["iran", "irÃ£", "ormuz", "hormuz", "estreito de ormuz", "strait of hormuz"],
-            ["bloqueio", "blockade", "naval", "navio", "navios", "shipping", "ship", "ships", "tanker", "tankers", "petroleo", "oil", "brent", "gasolina", "portos", "minas"],
+            [
+                "bloqueio",
+                "blockade",
+                "naval",
+                "navio",
+                "navios",
+                "shipping",
+                "ship",
+                "ships",
+                "tanker",
+                "tankers",
+                "petroleo",
+                "oil",
+                "brent",
+                "gasolina",
+                "portos",
+                "minas",
+            ],
         ],
         "buckets": ["dollar", "index", "curve_long"],
         "securities": ["PETR4"],
@@ -137,15 +157,61 @@ MACRO_THEME_RULES = {
     "iran_negotiation": {
         "keyword_groups": [
             ["iran", "irÃ£", "irÃƒÂ£", "eua", "usa", "us"],
-            ["negotiation", "negotiations", "negociacao", "negociação", "negociacoes", "negociações", "dialog", "talks", "progresso", "rodada de negociacoes", "rodada de negociações", "apetite por risco", "risk-on", "risk on", "chegar a um acordo", "disposto a mais uma rodada"],
+            [
+                "negotiation",
+                "negotiations",
+                "negociacao",
+                "negociação",
+                "negociacoes",
+                "negociações",
+                "dialog",
+                "talks",
+                "progresso",
+                "rodada de negociacoes",
+                "rodada de negociações",
+                "apetite por risco",
+                "risk-on",
+                "risk on",
+                "chegar a um acordo",
+                "disposto a mais uma rodada",
+            ],
         ],
         "buckets": ["index", "dollar", "curve_long"],
     },
     "iran_negotiation_setback": {
         "keyword_groups": [
             ["iran", "irÃ£", "irÃƒÂ£", "eua", "usa", "us"],
-            ["negotiation", "negotiations", "negociacao", "negociação", "negociacoes", "negociações", "dialog", "talks", "diplomacy", "diplomacia"],
-            ["renuncia", "renunciou", "resign", "resigned", "resignation", "linha dura", "hardliner", "hard line", "pressure", "pressao", "pressão", "impasse", "deadlock", "setback", "retrocesso", "sem sucessor", "unknown successor"],
+            [
+                "negotiation",
+                "negotiations",
+                "negociacao",
+                "negociação",
+                "negociacoes",
+                "negociações",
+                "dialog",
+                "talks",
+                "diplomacy",
+                "diplomacia",
+            ],
+            [
+                "renuncia",
+                "renunciou",
+                "resign",
+                "resigned",
+                "resignation",
+                "linha dura",
+                "hardliner",
+                "hard line",
+                "pressure",
+                "pressao",
+                "pressão",
+                "impasse",
+                "deadlock",
+                "setback",
+                "retrocesso",
+                "sem sucessor",
+                "unknown successor",
+            ],
         ],
         "buckets": ["index", "dollar", "curve_long"],
     },
@@ -153,40 +219,130 @@ MACRO_THEME_RULES = {
 
 MACRO_THEME_RULES["ormuz_blockade"]["keyword_groups"][1].extend(
     [
-        "estreito", "strait", "interdicao", "apreensao",
-        "exportacoes", "marinha", "pirataria", "energia", "energy",
-        "combate", "combat", "forcas",
+        "estreito",
+        "strait",
+        "interdicao",
+        "apreensao",
+        "exportacoes",
+        "marinha",
+        "pirataria",
+        "energia",
+        "energy",
+        "combate",
+        "combat",
+        "forcas",
     ]
 )
-MACRO_THEME_RULES["iran_negotiation"]["keyword_groups"][0].extend(
-    ["libano", "abraham", "abraao"]
-)
+MACRO_THEME_RULES["iran_negotiation"]["keyword_groups"][0].extend(["libano", "abraham", "abraao"])
 MACRO_THEME_RULES["iran_negotiation"]["keyword_groups"][1].extend(
     [
-        "acordo nuclear", "nuclear deal", "ceasefire", "cessar-fogo", "cessar fogo", "desescalada",
-        "de-escalation", "risk relief", "alivio", "alívio", "sanctions relief", "alivio de sancoes",
+        "acordo nuclear",
+        "nuclear deal",
+        "ceasefire",
+        "cessar-fogo",
+        "cessar fogo",
+        "desescalada",
+        "de-escalation",
+        "risk relief",
+        "alivio",
+        "alívio",
+        "sanctions relief",
+        "alivio de sancoes",
     ]
 )
 MACRO_THEME_RULES["iran_negotiation_setback"]["keyword_groups"][1].extend(
     [
-        "saida do negociador", "saída do negociador", "negociador moderado", "moderate negotiator",
-        "ponta moderada", "ghalibaf", "substituto incerto", "replacement unclear", "leadership uncertainty",
-        "diplomatic setback", "talks setback", "colapso das negociacoes", "colapso das negociações",
+        "saida do negociador",
+        "saída do negociador",
+        "negociador moderado",
+        "moderate negotiator",
+        "ponta moderada",
+        "ghalibaf",
+        "substituto incerto",
+        "replacement unclear",
+        "leadership uncertainty",
+        "diplomatic setback",
+        "talks setback",
+        "colapso das negociacoes",
+        "colapso das negociações",
     ]
 )
 
 SESSION_RISK_THEMES = {"ormuz_blockade", "iran_negotiation", "iran_negotiation_setback"}
 
 MARKET_RELEVANCE_TERMS = [
-    "macro", "mercado", "market", "juros", "rates", "yield", "treasury",
-    "copom", "selic", "inflacao", "inflation", "ipca", "fiscal", "arcabouco",
-    "dolar", "fx", "real", "brl", "usd", "ibov", "ibovespa", "indice", "equities",
-    "petroleo", "oil", "brent", "minerio", "iron ore", "bancos", "bank",
-    "payroll", "fed", "bcb", "bc", "tariff", "china", "growth",
-    "iran", "irÃ£", "ormuz", "hormuz", "estreito de ormuz", "blockade", "bloqueio",
-    "naval", "navio", "navios", "shipping", "tanker", "tankers", "energia", "energy",
-    "negotiation", "negotiations", "negociacao", "negociação", "negociacoes", "negociações", "dialog", "talks", "progresso", "apetite por risco", "risk-on", "risk on",
-    "hardliner", "linha dura", "renuncia", "resign", "resigned", "resignation", "deadlock", "impasse",
+    "macro",
+    "mercado",
+    "market",
+    "juros",
+    "rates",
+    "yield",
+    "treasury",
+    "copom",
+    "selic",
+    "inflacao",
+    "inflation",
+    "ipca",
+    "fiscal",
+    "arcabouco",
+    "dolar",
+    "fx",
+    "real",
+    "brl",
+    "usd",
+    "ibov",
+    "ibovespa",
+    "indice",
+    "equities",
+    "petroleo",
+    "oil",
+    "brent",
+    "minerio",
+    "iron ore",
+    "bancos",
+    "bank",
+    "payroll",
+    "fed",
+    "bcb",
+    "bc",
+    "tariff",
+    "china",
+    "growth",
+    "iran",
+    "irÃ£",
+    "ormuz",
+    "hormuz",
+    "estreito de ormuz",
+    "blockade",
+    "bloqueio",
+    "naval",
+    "navio",
+    "navios",
+    "shipping",
+    "tanker",
+    "tankers",
+    "energia",
+    "energy",
+    "negotiation",
+    "negotiations",
+    "negociacao",
+    "negociação",
+    "negociacoes",
+    "negociações",
+    "dialog",
+    "talks",
+    "progresso",
+    "apetite por risco",
+    "risk-on",
+    "risk on",
+    "hardliner",
+    "linha dura",
+    "renuncia",
+    "resign",
+    "resigned",
+    "resignation",
+    "deadlock",
+    "impasse",
 ]
 
 NEWS_RELEVANCE_WEIGHTS = {
@@ -196,43 +352,210 @@ NEWS_RELEVANCE_WEIGHTS = {
 }
 
 HIGH_CONFIDENCE_MACRO_TERMS = [
-    "juros", "rates", "yield", "treasury", "copom", "selic", "inflacao", "inflation",
-    "ipca", "fiscal", "arcabouco", "dolar", "fx", "real", "brl", "usd",
-    "ibov", "ibovespa", "s&p", "nasdaq", "dow", "russell",
-    "petroleo", "oil", "brent", "minerio", "iron ore", "payroll", "fed", "bcb", "bc",
-    "tariff", "china", "ormuz", "hormuz", "estreito de ormuz", "blockade", "bloqueio",
-    "naval", "navio", "navios", "shipping", "tanker", "tankers", "energia", "energy",
-    "negotiation", "negotiations", "negociacao", "negociação", "negociacoes", "negociações", "dialog", "talks", "progresso", "apetite por risco", "risk-on", "risk on",
-    "hardliner", "linha dura", "renuncia", "resign", "resigned", "resignation", "deadlock", "impasse",
+    "juros",
+    "rates",
+    "yield",
+    "treasury",
+    "copom",
+    "selic",
+    "inflacao",
+    "inflation",
+    "ipca",
+    "fiscal",
+    "arcabouco",
+    "dolar",
+    "fx",
+    "real",
+    "brl",
+    "usd",
+    "ibov",
+    "ibovespa",
+    "s&p",
+    "nasdaq",
+    "dow",
+    "russell",
+    "petroleo",
+    "oil",
+    "brent",
+    "minerio",
+    "iron ore",
+    "payroll",
+    "fed",
+    "bcb",
+    "bc",
+    "tariff",
+    "china",
+    "ormuz",
+    "hormuz",
+    "estreito de ormuz",
+    "blockade",
+    "bloqueio",
+    "naval",
+    "navio",
+    "navios",
+    "shipping",
+    "tanker",
+    "tankers",
+    "energia",
+    "energy",
+    "negotiation",
+    "negotiations",
+    "negociacao",
+    "negociação",
+    "negociacoes",
+    "negociações",
+    "dialog",
+    "talks",
+    "progresso",
+    "apetite por risco",
+    "risk-on",
+    "risk on",
+    "hardliner",
+    "linha dura",
+    "renuncia",
+    "resign",
+    "resigned",
+    "resignation",
+    "deadlock",
+    "impasse",
 ]
 
 GENERIC_EQUITY_TERMS = ["acoes", "aÃ§Ãµes", "equities", "shares", "stock", "stocks"]
 
 IDIOSYNCRATIC_NEWS_TERMS = [
-    "fda", "terapia", "therapy", "cancer", "oncology", "drug", "trial", "ensaio",
-    "phase 2", "phase 3", "fase 2", "fase 3", "guidance", "earnings", "lucro",
-    "results", "resultado", "ceo", "cfo", "layoff", "layoffs", "demiss", "dividend",
-    "buyback", "merger", "acquisition", "m&a", "record low", "all-time low",
-    "mÃ­nima histÃ³rica", "minima historica", "ipo", "initial public offering",
-    "abre capital", "oferta publica inicial", "oferta pública inicial",
+    "fda",
+    "terapia",
+    "therapy",
+    "cancer",
+    "oncology",
+    "drug",
+    "trial",
+    "ensaio",
+    "phase 2",
+    "phase 3",
+    "fase 2",
+    "fase 3",
+    "guidance",
+    "earnings",
+    "lucro",
+    "results",
+    "resultado",
+    "ceo",
+    "cfo",
+    "layoff",
+    "layoffs",
+    "demiss",
+    "dividend",
+    "buyback",
+    "merger",
+    "acquisition",
+    "m&a",
+    "record low",
+    "all-time low",
+    "mÃ­nima histÃ³rica",
+    "minima historica",
+    "ipo",
+    "initial public offering",
+    "abre capital",
+    "oferta publica inicial",
+    "oferta pública inicial",
 ]
 CORPORATE_DEAL_TERMS = [
-    "artificial intelligence", "inteligencia artificial", "inteligência artificial", "ai ",
-    "deal", "deal for", "agreement with", "acordo comercial", "parceria", "partnership",
-    "contrato", "contract", "record close", "record high", "fechamento recorde",
-    "shares", "ações", "acoes", "barrons.com", "vendor", "cliente", "customer",
-    "ipo", "initial public offering", "abre capital", "oferta publica inicial", "oferta pública inicial",
+    "artificial intelligence",
+    "inteligencia artificial",
+    "inteligência artificial",
+    "ai ",
+    "deal",
+    "deal for",
+    "agreement with",
+    "acordo comercial",
+    "parceria",
+    "partnership",
+    "contrato",
+    "contract",
+    "record close",
+    "record high",
+    "fechamento recorde",
+    "shares",
+    "ações",
+    "acoes",
+    "barrons.com",
+    "vendor",
+    "cliente",
+    "customer",
+    "ipo",
+    "initial public offering",
+    "abre capital",
+    "oferta publica inicial",
+    "oferta pública inicial",
 ]
 
 HARD_MACRO_ANCHOR_TERMS = {
-    "juros", "rates", "yield", "treasury", "copom", "selic", "inflacao", "inflation",
-    "ipca", "fiscal", "arcabouco", "dolar", "fx", "real", "brl", "usd",
-    "ibov", "ibovespa", "indice", "index", "s&p", "nasdaq", "dow", "russell",
-    "petroleo", "oil", "brent", "minerio", "iron ore", "payroll", "fed", "bcb", "bc",
-    "tariff", "china", "ormuz", "hormuz", "estreito de ormuz", "blockade", "bloqueio",
-    "naval", "navio", "navios", "shipping", "tanker", "tankers",
-    "negotiation", "negotiations", "negociacao", "negociação", "negociacoes", "negociações", "dialog", "talks", "progresso", "risk-on", "risk on",
-    "hardliner", "linha dura", "renuncia", "resign", "resigned", "resignation", "deadlock", "impasse",
+    "juros",
+    "rates",
+    "yield",
+    "treasury",
+    "copom",
+    "selic",
+    "inflacao",
+    "inflation",
+    "ipca",
+    "fiscal",
+    "arcabouco",
+    "dolar",
+    "fx",
+    "real",
+    "brl",
+    "usd",
+    "ibov",
+    "ibovespa",
+    "indice",
+    "index",
+    "s&p",
+    "nasdaq",
+    "dow",
+    "russell",
+    "petroleo",
+    "oil",
+    "brent",
+    "minerio",
+    "iron ore",
+    "payroll",
+    "fed",
+    "bcb",
+    "bc",
+    "tariff",
+    "china",
+    "ormuz",
+    "hormuz",
+    "estreito de ormuz",
+    "blockade",
+    "bloqueio",
+    "naval",
+    "navio",
+    "navios",
+    "shipping",
+    "tanker",
+    "tankers",
+    "negotiation",
+    "negotiations",
+    "negociacao",
+    "negociação",
+    "negociacoes",
+    "negociações",
+    "dialog",
+    "talks",
+    "progresso",
+    "risk-on",
+    "risk on",
+    "hardliner",
+    "linha dura",
+    "renuncia",
+    "resign",
+    "resigned",
+    "resignation",
+    "deadlock",
+    "impasse",
 }
 
 
@@ -240,13 +563,28 @@ TECHNICAL_LIQUIDITY_RULES = [
     {
         "keyword_groups": [
             ["fed de nova york", "new york fed", "ny fed", "federal reserve bank of new york"],
-            ["reinvest", "reinvestment", "compras de reinvestimento", "reserve management", "gestao de reservas", "compras de gestao de reservas"],
+            [
+                "reinvest",
+                "reinvestment",
+                "compras de reinvestimento",
+                "reserve management",
+                "gestao de reservas",
+                "compras de gestao de reservas",
+            ],
         ],
     },
     {
         "keyword_groups": [
             ["fed", "federal reserve"],
-            ["repo", "reverse repo", "term repo", "overnight repo", "standing repo", "operacao de liquidez", "operacao de recompra"],
+            [
+                "repo",
+                "reverse repo",
+                "term repo",
+                "overnight repo",
+                "standing repo",
+                "operacao de liquidez",
+                "operacao de recompra",
+            ],
         ],
     },
 ]
@@ -255,13 +593,39 @@ TECHNICAL_BALANCE_SHEET_RULES = [
     {
         "keyword_groups": [
             ["fed de nova york", "new york fed", "ny fed", "federal reserve bank of new york"],
-            ["unrealized loss", "unrealized losses", "prejuizo nao realizado", "prejuÃ­zo nÃ£o realizado", "prejuÃ­zo nÃ£o realizado", "nao realizado", "nÃ£o realizado", "losses on assets", "loss on assets", "annual report", "relatorio anual", "relatÃ³rio anual", "annual financial statements", "fair value"],
+            [
+                "unrealized loss",
+                "unrealized losses",
+                "prejuizo nao realizado",
+                "prejuÃ­zo nÃ£o realizado",
+                "prejuÃ­zo nÃ£o realizado",
+                "nao realizado",
+                "nÃ£o realizado",
+                "losses on assets",
+                "loss on assets",
+                "annual report",
+                "relatorio anual",
+                "relatÃ³rio anual",
+                "annual financial statements",
+                "fair value",
+            ],
         ],
     },
     {
         "keyword_groups": [
             ["federal reserve", "fed", "reserve bank"],
-            ["balance sheet", "balanco", "balanÃ§o", "soma", "system open market account", "held outright", "portfolio", "mark-to-market", "mark to market", "mtm"],
+            [
+                "balance sheet",
+                "balanco",
+                "balanÃ§o",
+                "soma",
+                "system open market account",
+                "held outright",
+                "portfolio",
+                "mark-to-market",
+                "mark to market",
+                "mtm",
+            ],
         ],
     },
 ]
@@ -271,27 +635,76 @@ LOW_SIGNAL_MACRO_TERMS = {
 }
 
 HIGH_CONVICTION_CENTRAL_BANK_TERMS = [
-    "surprise", "unexpected", "emergency", "intermeeting", "unscheduled",
-    "rate cut", "rate hike", "corte de juros", "alta de juros", "guidance",
-    "dot plot", "fomc", "fed funds", "qe", "qt",
+    "surprise",
+    "unexpected",
+    "emergency",
+    "intermeeting",
+    "unscheduled",
+    "rate cut",
+    "rate hike",
+    "corte de juros",
+    "alta de juros",
+    "guidance",
+    "dot plot",
+    "fomc",
+    "fed funds",
+    "qe",
+    "qt",
 ]
 REGIME_SHIFT_SCENARIO_TERMS = [
-    "emergency", "intermeeting", "unscheduled", "ceasefire", "blockade",
-    "bloqueio", "strait", "ormuz", "hormuz", "tariff", "default", "calamity",
-    "sanction", "sanctions", "war", "ataque", "ataques", "invasion", "invasao",
-    "breakthrough", "deal reached", "acordo", "agreement", "guidance change",
+    "emergency",
+    "intermeeting",
+    "unscheduled",
+    "ceasefire",
+    "blockade",
+    "bloqueio",
+    "strait",
+    "ormuz",
+    "hormuz",
+    "tariff",
+    "default",
+    "calamity",
+    "sanction",
+    "sanctions",
+    "war",
+    "ataque",
+    "ataques",
+    "invasion",
+    "invasao",
+    "breakthrough",
+    "deal reached",
+    "acordo",
+    "agreement",
+    "guidance change",
 ]
 SECONDARY_ECHO_SCENARIO_TERMS = [
-    "reports", "reporta", "reported", "estima", "estimates", "planeja",
-    "plans", "says", "afirma", "comentou", "commented", "according to",
-    "segundo", "expected to", "should", "could", "may", "might",
+    "reports",
+    "reporta",
+    "reported",
+    "estima",
+    "estimates",
+    "planeja",
+    "plans",
+    "says",
+    "afirma",
+    "comentou",
+    "commented",
+    "according to",
+    "segundo",
+    "expected to",
+    "should",
+    "could",
+    "may",
+    "might",
 ]
 
 
 def _match_all_keyword_groups(text: str, keyword_groups: list[list[str]]) -> bool:
     if not keyword_groups:
         return False
-    return all(any(_keyword_in_text(text, keyword) for keyword in group) for group in keyword_groups)
+    return all(
+        any(_keyword_in_text(text, keyword) for keyword in group) for group in keyword_groups
+    )
 
 
 def _match_any_keyword_rule(text: str, rules: list[dict[str, Any]]) -> bool:
@@ -303,7 +716,9 @@ def _keyword_in_text(text: str, keyword: str) -> bool:
     if not raw:
         return False
     if " " in raw:
-        pattern = r"(?<![0-9A-Za-zÀ-ÿ])" + re.escape(raw).replace(r"\ ", r"\s+") + r"(?![0-9A-Za-zÀ-ÿ])"
+        pattern = (
+            r"(?<![0-9A-Za-zÀ-ÿ])" + re.escape(raw).replace(r"\ ", r"\s+") + r"(?![0-9A-Za-zÀ-ÿ])"
+        )
         return re.search(pattern, text) is not None
 
     compact = re.sub(r"[^0-9A-Za-zÀ-ÿ]", "", raw)
@@ -318,9 +733,9 @@ class MacroStateStore:
 
     def __init__(self, root_dir: str | None = None):
         self.root_dir = root_dir or Config.MACRO_DATA_DIR
-        self.state_path = os.path.join(self.root_dir, 'state.json')
-        self.events_path = os.path.join(self.root_dir, 'events.jsonl')
-        self.snapshots_path = os.path.join(self.root_dir, 'snapshots.jsonl')
+        self.state_path = os.path.join(self.root_dir, "state.json")
+        self.events_path = os.path.join(self.root_dir, "events.jsonl")
+        self.snapshots_path = os.path.join(self.root_dir, "snapshots.jsonl")
         self._lock = self.__class__._state_lock
         os.makedirs(self.root_dir, exist_ok=True)
 
@@ -378,7 +793,7 @@ class MacroStateStore:
             return self._default_state()
 
         try:
-            with open(self.state_path, 'r', encoding='utf-8') as f:
+            with open(self.state_path, "r", encoding="utf-8") as f:
                 state = json.load(f)
         except Exception:
             logger.exception("Failed to load macro state file")
@@ -386,19 +801,15 @@ class MacroStateStore:
 
         default = self._default_state()
         raw_state = state or {}
-        default.update({
-            key: value
-            for key, value in raw_state.items()
-            if key not in {"collector", "snapshot"}
-        })
+        default.update(
+            {key: value for key, value in raw_state.items() if key not in {"collector", "snapshot"}}
+        )
         default["collector"].update(raw_state.get("collector", {}))
 
         snapshot_state = raw_state.get("snapshot", {}) or {}
-        default["snapshot"].update({
-            key: value
-            for key, value in snapshot_state.items()
-            if key not in {"news", "market"}
-        })
+        default["snapshot"].update(
+            {key: value for key, value in snapshot_state.items() if key not in {"news", "market"}}
+        )
         default["snapshot"]["news"].update(snapshot_state.get("news", {}) or {})
         default["snapshot"]["market"].update(snapshot_state.get("market", {}) or {})
         return default
@@ -406,7 +817,7 @@ class MacroStateStore:
     def _save_state_unlocked(self, state: dict[str, Any]) -> None:
         os.makedirs(self.root_dir, exist_ok=True)
         temp_path = f"{self.state_path}.{os.getpid()}.{threading.get_ident()}.tmp"
-        with open(temp_path, 'w', encoding='utf-8') as f:
+        with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
         last_error = None
         for _ in range(12):
@@ -453,7 +864,7 @@ class MacroStateStore:
 
             new_events: list[dict[str, Any]] = []
             if events:
-                with open(self.events_path, 'a', encoding='utf-8') as f:
+                with open(self.events_path, "a", encoding="utf-8") as f:
                     for event in events:
                         event_id = event.get("event_id")
                         if event_id and event_id in existing_ids:
@@ -461,7 +872,7 @@ class MacroStateStore:
 
                         existing_ids.add(event_id)
                         new_events.append(event)
-                        f.write(json.dumps(event, ensure_ascii=False) + '\n')
+                        f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
             state["recent_events"] = (new_events + existing_events)[:200]
             state["event_count"] = int(state.get("event_count", 0)) + len(new_events)
@@ -470,16 +881,18 @@ class MacroStateStore:
             snapshot = state.get("snapshot", {}) or self._default_state()["snapshot"]
             snapshot_news = snapshot.get("news", {}) or {}
             current_items = (new_events + list(snapshot_news.get("items") or []))[:20]
-            snapshot_news.update({
-                "count": len(current_items),
-                "new_count": len(new_events),
-                "items": current_items,
-                "timeout_windows": (source_status or {}).get(
-                    "timeout_windows",
-                    snapshot_news.get("timeout_windows", 0),
-                ),
-                "updated_at": _now_iso(),
-            })
+            snapshot_news.update(
+                {
+                    "count": len(current_items),
+                    "new_count": len(new_events),
+                    "items": current_items,
+                    "timeout_windows": (source_status or {}).get(
+                        "timeout_windows",
+                        snapshot_news.get("timeout_windows", 0),
+                    ),
+                    "updated_at": _now_iso(),
+                }
+            )
             snapshot["news"] = snapshot_news
 
             snapshot_sources = snapshot.get("sources", {}) or {}
@@ -506,7 +919,7 @@ class MacroStateStore:
 
             new_events: list[dict[str, Any]] = []
             if events:
-                with open(self.events_path, 'a', encoding='utf-8') as f:
+                with open(self.events_path, "a", encoding="utf-8") as f:
                     for event in events:
                         event_id = event.get("event_id")
                         if event_id and event_id in existing_ids:
@@ -514,14 +927,20 @@ class MacroStateStore:
 
                         existing_ids.add(event_id)
                         new_events.append(event)
-                        f.write(json.dumps(event, ensure_ascii=False) + '\n')
+                        f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
             if snapshot:
-                with open(self.snapshots_path, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({
-                        "generated_at": snapshot.get("generated_at"),
-                        "snapshot": snapshot,
-                    }, ensure_ascii=False) + '\n')
+                with open(self.snapshots_path, "a", encoding="utf-8") as f:
+                    f.write(
+                        json.dumps(
+                            {
+                                "generated_at": snapshot.get("generated_at"),
+                                "snapshot": snapshot,
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
 
             state["recent_events"] = (new_events + existing_events)[:200]
             state["event_count"] = int(state.get("event_count", 0)) + len(new_events)
@@ -546,9 +965,15 @@ class MacroStateStore:
             self._save_state_unlocked(state)
             return _deep_copy_json(state)
 
-    def list_recent_events(self, limit: int = 20, source: str | None = None) -> list[dict[str, Any]]:
+    def list_recent_events(
+        self, limit: int = 20, source: str | None = None
+    ) -> list[dict[str, Any]]:
         state = self.read_state()
-        events = state.get("recent_events", [])
+        events = [
+            event
+            for event in (state.get("recent_events", []) or [])
+            if isinstance(event, dict)
+        ]
         if source:
             events = [event for event in events if event.get("source") == source]
         return events[:limit]
@@ -562,16 +987,24 @@ class MacroStateStore:
     ) -> list[dict[str, Any]]:
         if target_day is None:
             local_day = datetime.now(LOCAL_TZ).date()
-        elif hasattr(target_day, "year") and hasattr(target_day, "month") and hasattr(target_day, "day"):
+        elif (
+            hasattr(target_day, "year")
+            and hasattr(target_day, "month")
+            and hasattr(target_day, "day")
+        ):
             local_day = target_day
         else:
             parsed = _parse_iso_datetime(target_day)
-            local_day = parsed.astimezone(LOCAL_TZ).date() if parsed else datetime.now(LOCAL_TZ).date()
+            local_day = (
+                parsed.astimezone(LOCAL_TZ).date() if parsed else datetime.now(LOCAL_TZ).date()
+            )
 
         merged: dict[str, dict[str, Any]] = {}
 
         def event_key(event: dict[str, Any]) -> str:
-            return str(event.get("event_id") or _sha1_text(event.get("headline"), event.get("event_time")))
+            return str(
+                event.get("event_id") or _sha1_text(event.get("headline"), event.get("event_time"))
+            )
 
         def matches(event: dict[str, Any]) -> bool:
             if source and event.get("source") != source:
@@ -606,7 +1039,9 @@ class MacroStateStore:
                 merged[event_key(event)] = event
 
         events = list(merged.values())
-        events.sort(key=lambda item: _parse_iso_datetime(item.get("event_time")) or _utc_now(), reverse=True)
+        events.sort(
+            key=lambda item: _parse_iso_datetime(item.get("event_time")) or _utc_now(), reverse=True
+        )
         if limit and limit > 0:
             return events[:limit]
         return events
@@ -634,7 +1069,9 @@ class MacroStateStore:
         merged: dict[str, dict[str, Any]] = {}
 
         def event_key(event: dict[str, Any]) -> str:
-            return str(event.get("event_id") or _sha1_text(event.get("headline"), event.get("event_time")))
+            return str(
+                event.get("event_id") or _sha1_text(event.get("headline"), event.get("event_time"))
+            )
 
         def matches(event: dict[str, Any]) -> bool:
             if source and event.get("source") != source:
@@ -670,7 +1107,9 @@ class MacroStateStore:
                 merged[event_key(event)] = event
 
         events = list(merged.values())
-        events.sort(key=lambda item: _parse_iso_datetime(item.get("event_time")) or _utc_now(), reverse=True)
+        events.sort(
+            key=lambda item: _parse_iso_datetime(item.get("event_time")) or _utc_now(), reverse=True
+        )
         if limit and limit > 0:
             return events[:limit]
         return events
@@ -680,23 +1119,29 @@ class MacroStateStore:
             return []
 
         try:
-            with open(self.snapshots_path, 'r', encoding='utf-8') as f:
+            with open(self.snapshots_path, "r", encoding="utf-8") as f:
                 lines = [line.strip() for line in f if line.strip()]
         except Exception:
             logger.exception("Failed to read macro snapshot history")
             return []
 
-        history = []
+        history: list[dict[str, Any]] = []
         for line in lines[-limit:]:
             try:
-                history.append(json.loads(line))
+                payload = json.loads(line)
+                if isinstance(payload, dict):
+                    history.append(payload)
             except Exception:
                 continue
         return history
 
 
 class MacroIngestionService:
-    def __init__(self, config_class=Config, store: Optional[MacroStateStore] = None):
+    def __init__(
+        self,
+        config_class: type[Config] = Config,
+        store: Optional[MacroStateStore] = None,
+    ) -> None:
         self.config = config_class
         self.store = store or MacroStateStore()
         self.bloomberg = BloombergDesktopService(config_class=config_class)
@@ -761,9 +1206,8 @@ class MacroIngestionService:
             "linked_securities",
             "themes",
         )
-        return (
-            event.get("classification_version") == EVENT_CLASSIFICATION_VERSION
-            and all(field in event for field in required_fields)
+        return event.get("classification_version") == EVENT_CLASSIFICATION_VERSION and all(
+            field in event for field in required_fields
         )
 
     def freeze_news_events(
@@ -787,7 +1231,9 @@ class MacroIngestionService:
             frozen_events.extend(enriched_pending)
 
         order_map = {
-            (item.get("event_id") or _sha1_text(item.get("headline"), item.get("event_time"))): index
+            (
+                item.get("event_id") or _sha1_text(item.get("headline"), item.get("event_time"))
+            ): index
             for index, item in enumerate(news_events)
         }
         frozen_events.sort(
@@ -817,10 +1263,14 @@ class MacroIngestionService:
                 additional_headers={"Authorization": auth_token},
                 ping_interval=None,
             ) as ws:
-                await ws.send(json.dumps({
-                    "action": "subscribe",
-                    "topics": self.config.MACRO_BLEU_TOPICS,
-                }))
+                await ws.send(
+                    json.dumps(
+                        {
+                            "action": "subscribe",
+                            "topics": self.config.MACRO_BLEU_TOPICS,
+                        }
+                    )
+                )
 
                 for _ in range(self.config.MACRO_BLEU_READ_WINDOWS):
                     try:
@@ -920,10 +1370,14 @@ class MacroIngestionService:
                     additional_headers={"Authorization": auth_token},
                     ping_interval=None,
                 ) as ws:
-                    await ws.send(json.dumps({
-                        "action": "subscribe",
-                        "topics": topics,
-                    }))
+                    await ws.send(
+                        json.dumps(
+                            {
+                                "action": "subscribe",
+                                "topics": topics,
+                            }
+                        )
+                    )
                     reconnect_count += 1
                     timeout_windows = 0
                     connected_at = _now_iso()
@@ -1033,17 +1487,19 @@ class MacroIngestionService:
         normalized: list[dict[str, Any]] = []
         for row in rows:
             quantity = _safe_float(row.get("quantity")) or 0.0
-            normalized.append({
-                "broker_id": row.get("broker_id"),
-                "broker_name": row.get("broker_name"),
-                "average_price": row.get("average_price"),
-                "quantity": row.get("quantity"),
-                "quantity_float": quantity,
-                "percentage": row.get("percentage"),
-                "percentage_float": _safe_float(row.get("percentage")),
-                "relative_percentage": row.get("relative_percentage"),
-                "relative_percentage_float": _safe_float(row.get("relative_percentage")),
-            })
+            normalized.append(
+                {
+                    "broker_id": row.get("broker_id"),
+                    "broker_name": row.get("broker_name"),
+                    "average_price": row.get("average_price"),
+                    "quantity": row.get("quantity"),
+                    "quantity_float": quantity,
+                    "percentage": row.get("percentage"),
+                    "percentage_float": _safe_float(row.get("percentage")),
+                    "relative_percentage": row.get("relative_percentage"),
+                    "relative_percentage_float": _safe_float(row.get("relative_percentage")),
+                }
+            )
         return normalized
 
     def _build_participant_summary(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1112,8 +1568,16 @@ class MacroIngestionService:
                 bucket["open"] = open_price
             bucket["close"] = close_price
             bucket["window_end"] = candle.get("time")
-            bucket["high"] = high_price if bucket["high"] is None else max(bucket["high"], high_price or bucket["high"])
-            bucket["low"] = low_price if bucket["low"] is None else min(bucket["low"], low_price or bucket["low"])
+            bucket["high"] = (
+                high_price
+                if bucket["high"] is None
+                else max(bucket["high"], high_price or bucket["high"])
+            )
+            bucket["low"] = (
+                low_price
+                if bucket["low"] is None
+                else min(bucket["low"], low_price or bucket["low"])
+            )
             bucket["volume"] += volume
             bucket["candle_count"] += 1
 
@@ -1129,9 +1593,7 @@ class MacroIngestionService:
                     net_change_pct = (net_change / open_price) * 100.0
 
             window["direction"] = (
-                "up" if (net_change or 0.0) > 0
-                else "down" if (net_change or 0.0) < 0
-                else "flat"
+                "up" if (net_change or 0.0) > 0 else "down" if (net_change or 0.0) < 0 else "flat"
             )
             window["net_change"] = net_change
             window["net_change_pct"] = net_change_pct
@@ -1142,7 +1604,9 @@ class MacroIngestionService:
             )
         return windows
 
-    def _build_book_summary(self, bid: list[dict[str, Any]], ask: list[dict[str, Any]]) -> dict[str, Any]:
+    def _build_book_summary(
+        self, bid: list[dict[str, Any]], ask: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         top_bid_levels = bid[:20]
         top_ask_levels = ask[:20]
         best_bid = top_bid_levels[0] if top_bid_levels else None
@@ -1184,9 +1648,13 @@ class MacroIngestionService:
             timeout=max(60, self.config.MACRO_AQUANT_TIMEOUT_SECONDS),
             params={"tickers": ticker},
         )
-        participants_rows = []
+        participants_rows: list[dict[str, Any]] = []
         if isinstance(participants_payload, dict):
-            participants_rows = participants_payload.get(ticker, []) or []
+            participants_rows = [
+                row
+                for row in (participants_payload.get(ticker, []) or [])
+                if isinstance(row, dict)
+            ]
         normalized_participants = self._normalize_participant_rows(participants_rows)
         participant_summary = self._build_participant_summary(normalized_participants)
 
@@ -1198,9 +1666,13 @@ class MacroIngestionService:
                 "interval": self.config.MACRO_AQUANT_OHLCV_INTERVAL,
             },
         )
-        candles = []
+        candles: list[dict[str, Any]] = []
         if isinstance(ohlcv_payload, dict):
-            candles = ohlcv_payload.get("candles", []) or []
+            candles = [
+                candle
+                for candle in (ohlcv_payload.get("candles", []) or [])
+                if isinstance(candle, dict)
+            ]
         windows_5m = self._build_ohlcv_windows(candles)
         latest_window = windows_5m[-1] if windows_5m else None
         previous_window = windows_5m[-2] if len(windows_5m) > 1 else None
@@ -1256,7 +1728,9 @@ class MacroIngestionService:
                     "amount": best_ask.get("amount") if best_ask else None,
                 },
                 "summary": book_summary,
-                "error": None if (book_response and book_response.ok) else book_error or str(book_payload),
+                "error": None
+                if (book_response and book_response.ok)
+                else book_error or str(book_payload),
             },
         }
 
@@ -1325,58 +1799,58 @@ class MacroIngestionService:
         event: dict[str, Any],
         contract_signals: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
-        text = " ".join([
-            str(event.get("headline") or ""),
-            str(event.get("posted_by") or ""),
-        ]).lower()
+        text = " ".join(
+            [
+                str(event.get("headline") or ""),
+                str(event.get("posted_by") or ""),
+            ]
+        ).lower()
 
         buckets: list[str] = []
         securities: list[str] = []
         themes: list[str] = []
         contracts: list[str] = []
         reasons: list[str] = []
-        market_terms = [
-            term for term in MARKET_RELEVANCE_TERMS
-            if _keyword_in_text(text, term)
-        ]
-        macro_terms = [
-            term for term in HIGH_CONFIDENCE_MACRO_TERMS
-            if _keyword_in_text(text, term)
-        ]
+        market_terms = [term for term in MARKET_RELEVANCE_TERMS if _keyword_in_text(text, term)]
+        macro_terms = [term for term in HIGH_CONFIDENCE_MACRO_TERMS if _keyword_in_text(text, term)]
         high_conviction_macro_terms = [
-            term for term in macro_terms
-            if term not in LOW_SIGNAL_MACRO_TERMS
+            term for term in macro_terms if term not in LOW_SIGNAL_MACRO_TERMS
         ]
         idiosyncratic_terms = [
-            term for term in IDIOSYNCRATIC_NEWS_TERMS
-            if _keyword_in_text(text, term)
+            term for term in IDIOSYNCRATIC_NEWS_TERMS if _keyword_in_text(text, term)
         ]
         corporate_deal_terms = [
-            term for term in CORPORATE_DEAL_TERMS
-            if _keyword_in_text(text, term)
+            term for term in CORPORATE_DEAL_TERMS if _keyword_in_text(text, term)
         ]
         generic_equity_terms = [
-            term for term in GENERIC_EQUITY_TERMS
-            if _keyword_in_text(text, term)
+            term for term in GENERIC_EQUITY_TERMS if _keyword_in_text(text, term)
         ]
         corporate_style_headline = bool(corporate_deal_terms or idiosyncratic_terms)
         macro_anchor_terms = [
-            term for term in HARD_MACRO_ANCHOR_TERMS
-            if _keyword_in_text(text, term)
+            term for term in HARD_MACRO_ANCHOR_TERMS if _keyword_in_text(text, term)
         ]
         if corporate_style_headline and not macro_anchor_terms:
             market_terms = [term for term in market_terms if term in HARD_MACRO_ANCHOR_TERMS]
             macro_terms = [term for term in macro_terms if term in HARD_MACRO_ANCHOR_TERMS]
             high_conviction_macro_terms = [
-                term for term in high_conviction_macro_terms
-                if term in HARD_MACRO_ANCHOR_TERMS
+                term for term in high_conviction_macro_terms if term in HARD_MACRO_ANCHOR_TERMS
             ]
         technical_liquidity_operation = _match_any_keyword_rule(text, TECHNICAL_LIQUIDITY_RULES)
-        technical_balance_sheet_disclosure = _match_any_keyword_rule(text, TECHNICAL_BALANCE_SHEET_RULES)
+        technical_balance_sheet_disclosure = _match_any_keyword_rule(
+            text, TECHNICAL_BALANCE_SHEET_RULES
+        )
         if not technical_balance_sheet_disclosure:
-            technical_balance_sheet_disclosure = (
-                any(token in text for token in ("fed de nova york", "new york fed", "ny fed", "federal reserve bank of new york"))
-                and any(token in text for token in (
+            technical_balance_sheet_disclosure = any(
+                token in text
+                for token in (
+                    "fed de nova york",
+                    "new york fed",
+                    "ny fed",
+                    "federal reserve bank of new york",
+                )
+            ) and any(
+                token in text
+                for token in (
                     "unrealized loss",
                     "unrealized losses",
                     "prejuizo nao realizado",
@@ -1395,11 +1869,15 @@ class MacroIngestionService:
                     "mark-to-market",
                     "mark to market",
                     "soma",
-                ))
+                )
             )
-        if technical_liquidity_operation and any(_keyword_in_text(text, term) for term in HIGH_CONVICTION_CENTRAL_BANK_TERMS):
+        if technical_liquidity_operation and any(
+            _keyword_in_text(text, term) for term in HIGH_CONVICTION_CENTRAL_BANK_TERMS
+        ):
             technical_liquidity_operation = False
-        if technical_balance_sheet_disclosure and any(_keyword_in_text(text, term) for term in HIGH_CONVICTION_CENTRAL_BANK_TERMS):
+        if technical_balance_sheet_disclosure and any(
+            _keyword_in_text(text, term) for term in HIGH_CONVICTION_CENTRAL_BANK_TERMS
+        ):
             technical_balance_sheet_disclosure = False
         technical_operation = technical_liquidity_operation or technical_balance_sheet_disclosure
 
@@ -1417,20 +1895,33 @@ class MacroIngestionService:
             "index" in reasons
             and not any(
                 _keyword_in_text(text, term)
-                for term in ("ibov", "ibovespa", "indice", "s&p", "nasdaq", "dow", "russell", "futuros de indice", "index futures")
+                for term in (
+                    "ibov",
+                    "ibovespa",
+                    "indice",
+                    "s&p",
+                    "nasdaq",
+                    "dow",
+                    "russell",
+                    "futuros de indice",
+                    "index futures",
+                )
             )
             and generic_equity_terms
         ):
             buckets = [bucket for bucket in buckets if bucket != "index"]
             contracts = [
-                ticker for ticker in contracts
-                if _resolve_market_bucket(ticker) != "index"
+                ticker for ticker in contracts if _resolve_market_bucket(ticker) != "index"
             ]
             themes = [theme for theme in themes if theme != "index"]
             reasons = [reason for reason in reasons if reason != "index"]
 
         for theme, rule in MACRO_THEME_RULES.items():
-            if theme in SESSION_RISK_THEMES and corporate_style_headline and not high_conviction_macro_terms:
+            if (
+                theme in SESSION_RISK_THEMES
+                and corporate_style_headline
+                and not high_conviction_macro_terms
+            ):
                 continue
             if not _match_all_keyword_groups(text, rule.get("keyword_groups") or []):
                 continue
@@ -1446,9 +1937,7 @@ class MacroIngestionService:
             contracts.extend(rule.get("contracts") or [])
 
         explicit_contracts = [
-            ticker
-            for ticker in contract_signals.keys()
-            if _keyword_in_text(text, ticker.lower())
+            ticker for ticker in contract_signals if _keyword_in_text(text, ticker.lower())
         ]
         contracts.extend(explicit_contracts)
 
@@ -1475,9 +1964,15 @@ class MacroIngestionService:
             or themes
             or transmission_score >= 5.5
         )
-        if corporate_style_headline and not macro_anchor_terms and not (buckets or themes or explicit_contracts or securities):
+        if (
+            corporate_style_headline
+            and not macro_anchor_terms
+            and not (buckets or themes or explicit_contracts or securities)
+        ):
             strong_macro_signal = False
-        tracked_security_only = bool(securities) and transmission_score < 4.5 and not strong_macro_signal
+        tracked_security_only = (
+            bool(securities) and transmission_score < 4.5 and not strong_macro_signal
+        )
         idiosyncratic_only = (
             bool(idiosyncratic_terms or corporate_deal_terms)
             and transmission_score < 4.5
@@ -1504,7 +1999,9 @@ class MacroIngestionService:
                 key=lambda item: abs(item.get("net_change_pct_5m") or 0.0),
                 reverse=True,
             )
-            fallback_contracts = [item.get("ticker") for item in top_movers[:2] if item.get("ticker")]
+            fallback_contracts = [
+                str(item["ticker"]) for item in top_movers[:2] if item.get("ticker")
+            ]
             if fallback_contracts:
                 contracts.extend(fallback_contracts)
                 reasons.append("fallback_top_movers")
@@ -1514,7 +2011,12 @@ class MacroIngestionService:
             signal_strength = "idiosyncratic"
         elif technical_operation:
             signal_strength = "technical_low"
-        elif transmission_score >= 7.0 and (themes or explicit_contracts or len(buckets) >= 2 or len(high_conviction_macro_terms) >= 2):
+        elif transmission_score >= 7.0 and (
+            themes
+            or explicit_contracts
+            or len(buckets) >= 2
+            or len(high_conviction_macro_terms) >= 2
+        ):
             signal_strength = "high"
         elif market_relevant or tracked_security_only:
             signal_strength = "medium"
@@ -1552,7 +2054,13 @@ class MacroIngestionService:
             "idiosyncratic_only": idiosyncratic_only,
             "technical_operation": technical_operation,
             "signal_strength": signal_strength,
-            "macro_scope": "macro" if market_relevant else "tracked_security" if tracked_security_only else "idiosyncratic" if idiosyncratic_only else "none",
+            "macro_scope": "macro"
+            if market_relevant
+            else "tracked_security"
+            if tracked_security_only
+            else "idiosyncratic"
+            if idiosyncratic_only
+            else "none",
             "scenario_classification": scenario_profile["classification"],
             "scenario_reason": scenario_profile["reason"],
         }
@@ -1589,22 +2097,39 @@ class MacroIngestionService:
                 "reason": f"Tracked security move is relevant for context, but transmission is still narrow (score {transmission_score}) and not broad macro yet.",
             }
 
-        regime_shift_terms = [term for term in REGIME_SHIFT_SCENARIO_TERMS if _keyword_in_text(text, term)]
-        secondary_terms = [term for term in SECONDARY_ECHO_SCENARIO_TERMS if _keyword_in_text(text, term)]
+        regime_shift_terms = [
+            term for term in REGIME_SHIFT_SCENARIO_TERMS if _keyword_in_text(text, term)
+        ]
+        secondary_terms = [
+            term for term in SECONDARY_ECHO_SCENARIO_TERMS if _keyword_in_text(text, term)
+        ]
         multi_bucket = len(set(buckets)) >= 2
         explicit_transmission = bool(contracts or securities or buckets or themes)
         risk_theme_hit = bool(set(themes) & SESSION_RISK_THEMES)
 
         if market_relevant and (
-            (relevance in {"breaking", "important"} and transmission_score >= 7.0 and (multi_bucket or len(high_conviction_macro_terms) >= 2))
+            (
+                relevance in {"breaking", "important"}
+                and transmission_score >= 7.0
+                and (multi_bucket or len(high_conviction_macro_terms) >= 2)
+            )
             or regime_shift_terms
-            or (risk_theme_hit and transmission_score >= 6.0 and (explicit_transmission or len(high_conviction_macro_terms) >= 1))
+            or (
+                risk_theme_hit
+                and transmission_score >= 6.0
+                and (explicit_transmission or len(high_conviction_macro_terms) >= 1)
+            )
         ):
             return {
                 "classification": "regime_shift",
                 "reason": f"Headline carries regime-sensitive language and broad transmission potential across multiple macro buckets (score {transmission_score}).",
             }
-        if market_relevant and transmission_score >= 4.5 and explicit_transmission and (themes or buckets or high_conviction_macro_terms):
+        if (
+            market_relevant
+            and transmission_score >= 4.5
+            and explicit_transmission
+            and (themes or buckets or high_conviction_macro_terms)
+        ):
             return {
                 "classification": "tradable_catalyst",
                 "reason": f"Headline is macro-relevant and links to assets or buckets that can move the intraday scenario in a tradable way (score {transmission_score}).",
@@ -1723,28 +2248,33 @@ class MacroIngestionService:
 
             for ticker in detected["contracts"]:
                 signal = contract_signals.get(ticker, {})
-                links.append({
-                    "event_id": event.get("event_id"),
-                    "headline": event.get("headline"),
-                    "relevance": event.get("relevance"),
-                    "event_time": event.get("event_time"),
-                    "ticker": ticker,
-                    "bucket": signal.get("bucket"),
-                    "direction_5m": signal.get("direction_5m"),
-                    "net_change_pct_5m": signal.get("net_change_pct_5m"),
-                    "volume_5m": signal.get("volume_5m"),
-                    "book_imbalance": signal.get("book_imbalance"),
-                    "top_participants": signal.get("top_participants", [])[:3],
-                    "linked_securities": detected["securities"],
-                    "themes": detected["themes"],
-                    "link_reasons": detected["reasons"],
-                    "impact_score": impact_score,
-                })
+                links.append(
+                    {
+                        "event_id": event.get("event_id"),
+                        "headline": event.get("headline"),
+                        "relevance": event.get("relevance"),
+                        "event_time": event.get("event_time"),
+                        "ticker": ticker,
+                        "bucket": signal.get("bucket"),
+                        "direction_5m": signal.get("direction_5m"),
+                        "net_change_pct_5m": signal.get("net_change_pct_5m"),
+                        "volume_5m": signal.get("volume_5m"),
+                        "book_imbalance": signal.get("book_imbalance"),
+                        "top_participants": signal.get("top_participants", [])[:3],
+                        "linked_securities": detected["securities"],
+                        "themes": detected["themes"],
+                        "link_reasons": detected["reasons"],
+                        "impact_score": impact_score,
+                    }
+                )
 
         enriched_events.sort(
             key=lambda item: (
                 int(item.get("impact_score") or 0),
-                (_parse_iso_datetime(item.get("event_time")) or datetime.min.replace(tzinfo=timezone.utc)).timestamp(),
+                (
+                    _parse_iso_datetime(item.get("event_time"))
+                    or datetime.min.replace(tzinfo=timezone.utc)
+                ).timestamp(),
             ),
             reverse=True,
         )
@@ -1800,7 +2330,12 @@ class MacroIngestionService:
         started_at = _now_iso()
         news_events: list[dict[str, Any]] = []
         news_status: dict[str, Any] = {}
-        market_snapshot = {"contracts": {}, "securities": {}, "reference_assets": {}, "reference_groups": {}}
+        market_snapshot: dict[str, Any] = {
+            "contracts": {},
+            "securities": {},
+            "reference_assets": {},
+            "reference_groups": {},
+        }
         market_status: dict[str, Any] = {}
 
         if include_news:
@@ -1822,7 +2357,9 @@ class MacroIngestionService:
         recent_pool: list[dict[str, Any]] = []
         if include_news or include_market:
             state = self.store.read_state()
-            recent_cutoff = _utc_now() - timedelta(minutes=self.config.MACRO_NEWS_LINK_LOOKBACK_MINUTES)
+            recent_cutoff = _utc_now() - timedelta(
+                minutes=self.config.MACRO_NEWS_LINK_LOOKBACK_MINUTES
+            )
             recent_pool = [
                 event
                 for event in state.get("recent_events", [])
@@ -1832,7 +2369,9 @@ class MacroIngestionService:
         candidate_news = []
         seen_event_ids = set()
         for event in news_events + recent_pool:
-            event_id = event.get("event_id") or _sha1_text(event.get("headline"), event.get("event_time"))
+            event_id = event.get("event_id") or _sha1_text(
+                event.get("headline"), event.get("event_time")
+            )
             if event_id in seen_event_ids:
                 continue
             seen_event_ids.add(event_id)
@@ -1880,13 +2419,10 @@ class MacroIngestionService:
         }
 
         current_event_ids = {
-            event.get("event_id")
-            for event in news_events
-            if event.get("event_id")
+            event.get("event_id") for event in news_events if event.get("event_id")
         }
         persisted_news_events = [
-            event for event in enriched_news
-            if event.get("event_id") in current_event_ids
+            event for event in enriched_news if event.get("event_id") in current_event_ids
         ] or news_events
 
         result = {
@@ -1900,6 +2436,7 @@ class MacroIngestionService:
             self.store.record_collection(result)
             try:
                 from .macro_driver_service import MacroDriverService
+
                 MacroDriverService(store=self.store).refresh_drivers()
             except Exception:
                 logger.exception("Failed to refresh macro drivers after collection")
@@ -1994,8 +2531,14 @@ class MacroProjectionService:
                     "name": "ParticipantFlowSnapshot",
                     "description": "A ranked participant flow snapshot for a contract, covering all brokers in the pull.",
                     "attributes": [
-                        {"name": "participant_count", "description": "How many participants were captured in the pull."},
-                        {"name": "top_5_share_percentage", "description": "Combined concentration of the top five participants."},
+                        {
+                            "name": "participant_count",
+                            "description": "How many participants were captured in the pull.",
+                        },
+                        {
+                            "name": "top_5_share_percentage",
+                            "description": "Combined concentration of the top five participants.",
+                        },
                     ],
                     "examples": ["WINJ26 participant ranking", "DI1F29 participant concentration"],
                 },
@@ -2003,8 +2546,14 @@ class MacroProjectionService:
                     "name": "MarketMoveWindow",
                     "description": "A five-minute market movement summary for a contract.",
                     "attributes": [
-                        {"name": "direction_5m", "description": "Directional summary for the 5-minute window."},
-                        {"name": "net_change_pct_5m", "description": "Percent change over the last five-minute window."},
+                        {
+                            "name": "direction_5m",
+                            "description": "Directional summary for the 5-minute window.",
+                        },
+                        {
+                            "name": "net_change_pct_5m",
+                            "description": "Percent change over the last five-minute window.",
+                        },
                     ],
                     "examples": ["WINJ26 5-minute move", "WDOK26 5-minute move"],
                 },
@@ -2012,9 +2561,15 @@ class MacroProjectionService:
                     "name": "NewsImpactLink",
                     "description": "A structured link between an impactful news item and a moved contract or security.",
                     "attributes": [
-                        {"name": "link_reason", "description": "Heuristic explanation for the link."},
+                        {
+                            "name": "link_reason",
+                            "description": "Heuristic explanation for the link.",
+                        },
                     ],
-                    "examples": ["Breaking headline linked to WINJ26 move", "Fiscal theme linked to long-end DI move"],
+                    "examples": [
+                        "Breaking headline linked to WINJ26 move",
+                        "Fiscal theme linked to long-end DI move",
+                    ],
                 },
             ],
             "edge_types": [
@@ -2126,7 +2681,10 @@ class MacroProjectionService:
                 impactful_recent_events,
                 key=lambda item: (
                     int(item.get("impact_score") or 0),
-                    (_parse_iso_datetime(item.get("event_time")) or datetime.min.replace(tzinfo=timezone.utc)).timestamp(),
+                    (
+                        _parse_iso_datetime(item.get("event_time"))
+                        or datetime.min.replace(tzinfo=timezone.utc)
+                    ).timestamp(),
                 ),
                 reverse=True,
             )
@@ -2144,8 +2702,12 @@ class MacroProjectionService:
                     f"reasons={', '.join(event.get('link_reasons') or []) or 'none'}"
                 )
         else:
-            lines.append("- No impactful macro news events were captured in the current lookback window.")
-            lines.append("- Generic non-market headlines were intentionally omitted from the scenario context.")
+            lines.append(
+                "- No impactful macro news events were captured in the current lookback window."
+            )
+            lines.append(
+                "- Generic non-market headlines were intentionally omitted from the scenario context."
+            )
 
         market = snapshot.get("market", {})
         securities = market.get("securities") or {}
@@ -2221,7 +2783,9 @@ class MacroProjectionService:
                     f"themes={', '.join(item.get('themes') or []) or 'none'}"
                 )
         else:
-            lines.append("- No impactful macro news drivers detected in the current lookback window.")
+            lines.append(
+                "- No impactful macro news drivers detected in the current lookback window."
+            )
 
         lines.extend(["", "## News Impact Links"])
         if news_links:
@@ -2295,7 +2859,13 @@ class MacroProjectionService:
         else:
             lines.append("- No contract market data collected.")
 
-        lines.extend(["", "## Feed Health", json.dumps(snapshot.get("sources", {}), ensure_ascii=False, indent=2)])
+        lines.extend(
+            [
+                "",
+                "## Feed Health",
+                json.dumps(snapshot.get("sources", {}), ensure_ascii=False, indent=2),
+            ]
+        )
         return "\n".join(lines)
 
     def sync_snapshot_to_project(
@@ -2326,18 +2896,19 @@ class MacroProjectionService:
         file_info = ProjectManager.save_text_file_to_project(project.project_id, filename, markdown)
 
         project.name = project_name or project.name or self.DEFAULT_PROJECT_NAME
-        project.files.append({
-            "filename": file_info["original_filename"],
-            "size": file_info["size"],
-        })
+        project.files.append(
+            {
+                "filename": file_info["original_filename"],
+                "size": file_info["size"],
+            }
+        )
         project.total_text_length = len(markdown)
         project.simulation_requirement = simulation_requirement
         project.project_mode = "macro"
         project.agent_strategy = "macro_personas"
         project.ontology = self.build_macro_ontology(snapshot)
         project.analysis_summary = (
-            "Snapshot synced from live macro feeds at "
-            f"{snapshot.get('generated_at')}."
+            f"Snapshot synced from live macro feeds at {snapshot.get('generated_at')}."
         )
         project.status = ProjectStatus.ONTOLOGY_GENERATED
         project.graph_id = None
@@ -2359,7 +2930,7 @@ class MacroCollectorManager:
     _instance: Optional["MacroCollectorManager"] = None
     _instance_lock = threading.Lock()
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.store = MacroStateStore()
         self.service = MacroIngestionService(store=self.store)
         self._market_thread: Optional[threading.Thread] = None
@@ -2500,7 +3071,9 @@ class MacroCollectorManager:
                 if self._news_thread is current_thread:
                     self._news_thread = None
 
-            stopped_reason = "manual_stop" if self._manual_stop_requested else "news_listener_stopped"
+            stopped_reason = (
+                "manual_stop" if self._manual_stop_requested else "news_listener_stopped"
+            )
             self.store.update_collector_status(
                 running=self._market_thread_alive(),
                 news_listener_running=False,
@@ -2531,20 +3104,25 @@ class MacroCollectorManager:
             if not self._news_thread_alive():
                 self._spawn_news_thread()
 
-            return self.store.read_state().get("collector", {})
+            collector = self.store.read_state().get("collector", {})
+            return dict(collector) if isinstance(collector, dict) else {}
 
     def stop(self) -> dict[str, Any]:
         with self._runtime_lock:
             self._manual_stop_requested = True
             if self._market_thread_alive():
                 self._market_stop_event.set()
-                self._market_thread.join(timeout=3)
+                market_thread = self._market_thread
+                if market_thread is not None:
+                    market_thread.join(timeout=3)
                 if not self._market_thread_alive():
                     self._market_thread = None
 
             if self._news_thread_alive():
                 self._news_stop_event.set()
-                self._news_thread.join(timeout=3)
+                news_thread = self._news_thread
+                if news_thread is not None:
+                    news_thread.join(timeout=3)
                 if not self._news_thread_alive():
                     self._news_thread = None
 
@@ -2555,16 +3133,20 @@ class MacroCollectorManager:
                 news_listener_running=False,
                 stopped_reason="manual_stop",
             )
-            return self.store.read_state().get("collector", {})
+            collector = self.store.read_state().get("collector", {})
+            return dict(collector) if isinstance(collector, dict) else {}
 
     def status(self) -> dict[str, Any]:
         self._ensure_supervisor_running()
         self.recover_if_needed()
-        status = self.store.read_state().get("collector", {})
+        raw_status = self.store.read_state().get("collector", {})
+        status = dict(raw_status) if isinstance(raw_status, dict) else {}
         status["running"] = self._collector_threads_alive()
         status["market_poller_running"] = self._market_thread_alive()
         status["news_listener_running"] = self._news_thread_alive()
-        status["supervisor_running"] = bool(self._supervisor_thread and self._supervisor_thread.is_alive())
+        status["supervisor_running"] = bool(
+            self._supervisor_thread and self._supervisor_thread.is_alive()
+        )
         return status
 
     def recover_if_needed(self) -> dict[str, Any]:
@@ -2572,17 +3154,23 @@ class MacroCollectorManager:
             state = self.store.read_state()
             collector = state.get("collector", {})
             desired_running = bool(collector.get("desired_running"))
-            auto_restart_enabled = bool(collector.get("auto_restart_enabled", Config.MACRO_INGEST_AUTO_RESTART))
+            auto_restart_enabled = bool(
+                collector.get("auto_restart_enabled", Config.MACRO_INGEST_AUTO_RESTART)
+            )
 
             if not desired_running or not auto_restart_enabled:
                 status = dict(collector)
                 status["running"] = self._collector_threads_alive()
                 status["market_poller_running"] = self._market_thread_alive()
                 status["news_listener_running"] = self._news_thread_alive()
-                status["supervisor_running"] = bool(self._supervisor_thread and self._supervisor_thread.is_alive())
+                status["supervisor_running"] = bool(
+                    self._supervisor_thread and self._supervisor_thread.is_alive()
+                )
                 return status
 
-            interval_seconds = int(collector.get("interval_seconds") or Config.MACRO_INGEST_INTERVAL_SECONDS)
+            interval_seconds = int(
+                collector.get("interval_seconds") or Config.MACRO_INGEST_INTERVAL_SECONDS
+            )
             restarted_any = False
 
             if not self._market_thread_alive():
@@ -2608,27 +3196,36 @@ class MacroCollectorManager:
                     last_error=None,
                     last_news_error=None,
                 )
-                logger.warning("Macro collector worker was down and has been restarted automatically")
+                logger.warning(
+                    "Macro collector worker was down and has been restarted automatically"
+                )
 
-            status = self.store.read_state().get("collector", {})
+            raw_status = self.store.read_state().get("collector", {})
+            status = dict(raw_status) if isinstance(raw_status, dict) else {}
             status["running"] = self._collector_threads_alive()
             status["market_poller_running"] = self._market_thread_alive()
             status["news_listener_running"] = self._news_thread_alive()
-            status["supervisor_running"] = bool(self._supervisor_thread and self._supervisor_thread.is_alive())
+            status["supervisor_running"] = bool(
+                self._supervisor_thread and self._supervisor_thread.is_alive()
+            )
             return status
 
     def resume_if_needed(self) -> dict[str, Any]:
         self._ensure_supervisor_running()
         collector = self.store.read_state().get("collector", {})
         legacy_running = bool(collector.get("running"))
-        should_resume = bool(collector.get("desired_running")) or legacy_running or Config.MACRO_INGEST_ENABLE
+        should_resume = (
+            bool(collector.get("desired_running")) or legacy_running or Config.MACRO_INGEST_ENABLE
+        )
 
         if not should_resume:
             status = dict(collector)
             status["running"] = self._collector_threads_alive()
             status["market_poller_running"] = self._market_thread_alive()
             status["news_listener_running"] = self._news_thread_alive()
-            status["supervisor_running"] = bool(self._supervisor_thread and self._supervisor_thread.is_alive())
+            status["supervisor_running"] = bool(
+                self._supervisor_thread and self._supervisor_thread.is_alive()
+            )
             return status
 
         if (Config.MACRO_INGEST_ENABLE or legacy_running) and not collector.get("desired_running"):
@@ -2639,7 +3236,9 @@ class MacroCollectorManager:
 
         return self.recover_if_needed()
 
-    def collect_once(self, include_news: bool = True, include_market: bool = True) -> dict[str, Any]:
+    def collect_once(
+        self, include_news: bool = True, include_market: bool = True
+    ) -> dict[str, Any]:
         self.store.update_collector_status(last_started_at=_now_iso(), last_error=None)
         try:
             result = self.service.collect_all_once(

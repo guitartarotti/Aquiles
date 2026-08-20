@@ -12,6 +12,7 @@ import json
 import os
 import threading
 import time
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -36,9 +37,17 @@ from .macro_participant_registry import (
 class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
     _state_lock = threading.RLock()
 
-    def __init__(self, store: MacroStateStore | None = None, config: type[Config] = Config):
+    def __init__(
+        self,
+        store: MacroStateStore | None = None,
+        config: type[Config] = Config,
+        options_heatmap_manager: MacroOptionsHeatmapContextManager | None = None,
+    ):
         self.store = store or MacroStateStore()
         self.config = config
+        self.options_heatmap_manager = (
+            options_heatmap_manager or MacroOptionsHeatmapContextManager()
+        )
         self.root_dir = self.store.root_dir
         self.state_path = os.path.join(self.root_dir, "participant_heatmap_state.json")
         self._lock = self.__class__._state_lock
@@ -57,7 +66,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                 "enabled": bool(self.config.MACRO_PARTICIPANT_HEATMAP_ENABLE),
                 "auto_start": bool(self.config.MACRO_PARTICIPANT_HEATMAP_AUTO_START),
                 "interval_seconds": int(self.config.MACRO_PARTICIPANT_HEATMAP_INTERVAL_SECONDS),
-                "session_sample_limit": int(self.config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT),
+                "session_sample_limit": int(
+                    self.config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT
+                ),
                 "running": False,
                 "last_started_at": None,
                 "last_completed_at": None,
@@ -83,6 +94,8 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                         return self._default_state()
                     time.sleep(0.05)
 
+        if not isinstance(payload, dict):
+            return self._default_state()
         state = self._default_state()
         state.update({k: v for k, v in payload.items() if k not in {"assets", "collector"}})
         state["collector"] = {**state["collector"], **(payload.get("collector") or {})}
@@ -120,7 +133,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
 
         return registry
 
-    def _match_registry_entry(self, normalized_broker_name: str, registry: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    def _match_registry_entry(
+        self, normalized_broker_name: str, registry: dict[str, dict[str, Any]]
+    ) -> dict[str, Any] | None:
         if not normalized_broker_name:
             return None
 
@@ -211,11 +226,15 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
         specs: list[dict[str, Any]] = []
         di_tickers: list[str] = []
         seen_di: set[str] = set()
-        configured_di = list(getattr(self.config, "MACRO_PARTICIPANT_CROSS_ASSET_DI_TICKERS", []) or [])
-        fallback_di = list(dict.fromkeys(
-            list(getattr(self.config, "MACRO_CURVE_SHORT_TICKERS", []) or [])
-            + list(getattr(self.config, "MACRO_CURVE_LONG_TICKERS", []) or [])
-        ))
+        configured_di = list(
+            getattr(self.config, "MACRO_PARTICIPANT_CROSS_ASSET_DI_TICKERS", []) or []
+        )
+        fallback_di = list(
+            dict.fromkeys(
+                list(getattr(self.config, "MACRO_CURVE_SHORT_TICKERS", []) or [])
+                + list(getattr(self.config, "MACRO_CURVE_LONG_TICKERS", []) or [])
+            )
+        )
         source_di = configured_di if configured_di else fallback_di
         for ticker in source_di:
             normalized = str(ticker or "").strip()
@@ -224,40 +243,48 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                 di_tickers.append(normalized)
 
         if self.config.MACRO_INDEX_TICKERS:
-            specs.append({
-                "key": "win",
-                "label": "WIN",
-                "ticker": self.config.MACRO_INDEX_TICKERS[0],
-                "visible": True,
-                "role": "win",
-            })
+            specs.append(
+                {
+                    "key": "win",
+                    "label": "WIN",
+                    "ticker": self.config.MACRO_INDEX_TICKERS[0],
+                    "visible": True,
+                    "role": "win",
+                }
+            )
         if self.config.MACRO_DOLLAR_TICKERS:
-            specs.append({
-                "key": "wdo",
-                "label": "WDO",
-                "ticker": self.config.MACRO_DOLLAR_TICKERS[0],
-                "visible": True,
-                "role": "wdo",
-            })
+            specs.append(
+                {
+                    "key": "wdo",
+                    "label": "WDO",
+                    "ticker": self.config.MACRO_DOLLAR_TICKERS[0],
+                    "visible": True,
+                    "role": "wdo",
+                }
+            )
         if di_tickers:
-            specs.append({
-                "key": "di",
-                "label": "DI",
-                "ticker": di_tickers[0],
-                "visible": True,
-                "role": "di_anchor",
-                "curve_bucket": "di_curve",
-            })
+            specs.append(
+                {
+                    "key": "di",
+                    "label": "DI",
+                    "ticker": di_tickers[0],
+                    "visible": True,
+                    "role": "di_anchor",
+                    "curve_bucket": "di_curve",
+                }
+            )
             for ticker in di_tickers[1:]:
                 suffix = ticker.split("DI1")[-1].replace(":", "").lower()
-                specs.append({
-                    "key": f"di_{suffix}",
-                    "label": suffix.upper(),
-                    "ticker": ticker,
-                    "visible": False,
-                    "role": "di_curve",
-                    "curve_bucket": "di_curve",
-                })
+                specs.append(
+                    {
+                        "key": f"di_{suffix}",
+                        "label": suffix.upper(),
+                        "ticker": ticker,
+                        "visible": False,
+                        "role": "di_curve",
+                        "curve_bucket": "di_curve",
+                    }
+                )
         return specs
 
     def _is_price_valid(self, value: float | None) -> bool:
@@ -269,7 +296,7 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
         bid = _safe_float(summary.get("best_bid_price"))
         ask = _safe_float(summary.get("best_ask_price"))
 
-        if self._is_price_valid(bid) and self._is_price_valid(ask) and ask >= bid:
+        if bid is not None and ask is not None and self._is_price_valid(bid) and self._is_price_valid(ask) and ask >= bid:
             midpoint = (bid + ask) / 2.0
             spread_ratio = abs(ask - bid) / max(abs(midpoint), 1.0)
             if spread_ratio <= 0.02:
@@ -320,7 +347,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
 
     def _build_sample(self, spec: dict[str, str], snapshot: dict[str, Any]) -> dict[str, Any]:
         collected_at = snapshot.get("collected_at")
-        participants = ((snapshot.get("participants") or {}).get("all_rows") or [])[: self.config.MACRO_PARTICIPANT_HEATMAP_PARTICIPANT_LIMIT]
+        participants = ((snapshot.get("participants") or {}).get("all_rows") or [])[
+            : self.config.MACRO_PARTICIPANT_HEATMAP_PARTICIPANT_LIMIT
+        ]
         normalized_rows = [self._normalize_participant_row(row) for row in participants]
         last_price, price_source = self._extract_price(snapshot)
         last_candle = (snapshot.get("ohlcv") or {}).get("last") or {}
@@ -352,7 +381,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
 
     def _trim_samples(self, samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
         session_start_utc, _ = self._session_start_utc(_utc_now())
-        session_sample_limit = max(120, int(self.config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT))
+        session_sample_limit = max(
+            120, int(self.config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT)
+        )
         trimmed = []
         for item in samples:
             captured_at = _parse_iso(item.get("captured_at"))
@@ -384,7 +415,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             session_start_local = session_start_local - timedelta(days=1)
         return session_start_local.astimezone(timezone.utc), session_start_local.date().isoformat()
 
-    def _dedupe_candles(self, candles: list[dict[str, Any]], limit: int | None = None) -> list[dict[str, Any]]:
+    def _dedupe_candles(
+        self, candles: list[dict[str, Any]], limit: int | None = None
+    ) -> list[dict[str, Any]]:
         by_time: dict[str, dict[str, Any]] = {}
         for candle in candles:
             if not isinstance(candle, dict):
@@ -398,12 +431,16 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             return ordered[-limit:]
         return ordered
 
-    def _fetch_session_candles(self, ingestion: MacroIngestionService, ticker: str, now_utc: datetime) -> tuple[list[dict[str, Any]], str | None, str]:
+    def _fetch_session_candles(
+        self, ingestion: MacroIngestionService, ticker: str, now_utc: datetime
+    ) -> tuple[list[dict[str, Any]], str | None, str]:
         session_start_utc, session_date = self._session_start_utc(now_utc)
         response, payload, error = ingestion._fetch_json(
             f"https://sdk.aquant.com.br/trade/{ticker}/ohlcv",
             params={
-                "start": session_start_utc.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                "start": session_start_utc.replace(microsecond=0)
+                .isoformat()
+                .replace("+00:00", "Z"),
                 "end": now_utc.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 "interval": self.config.MACRO_AQUANT_OHLCV_INTERVAL,
             },
@@ -413,31 +450,42 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             candles = payload.get("candles", []) or []
         if not (response and response.ok) and not error:
             error = f"ohlcv_session_fetch_failed:{ticker}"
-        return self._dedupe_candles(candles, limit=max(180, int(self.config.MACRO_PARTICIPANT_HEATMAP_DAY_CANDLE_LIMIT))), error, session_date
+        return (
+            self._dedupe_candles(
+                candles, limit=max(180, int(self.config.MACRO_PARTICIPANT_HEATMAP_DAY_CANDLE_LIMIT))
+            ),
+            error,
+            session_date,
+        )
 
     def _state_has_cached_assets(self, state: dict[str, Any]) -> bool:
-        assets = (state.get("assets") or {})
-        for asset_state in assets.values():
-            if (asset_state.get("samples") or []):
-                return True
-        return False
+        assets = state.get("assets") or {}
+        return any(asset_state.get("samples") or [] for asset_state in assets.values())
 
     def _count_samples(self, state: dict[str, Any]) -> int:
-        return sum(len((asset_state.get("samples") or [])) for asset_state in ((state.get("assets") or {}).values()))
+        return sum(
+            len((asset_state.get("samples") or []))
+            for asset_state in ((state.get("assets") or {}).values())
+        )
 
-    def _capture_assets(self, specs: list[dict[str, Any]], current_state: dict[str, Any], refresh: bool) -> dict[str, Any]:
+    def _capture_assets(
+        self, specs: list[dict[str, Any]], current_state: dict[str, Any], refresh: bool
+    ) -> dict[str, Any]:
         ingestion = MacroIngestionService(store=self.store)
         assets_state = current_state.get("assets", {}) or {}
         now_utc = _utc_now()
 
         for spec in specs:
             ticker = spec["ticker"]
-            asset_state = assets_state.setdefault(ticker, {
-                "key": spec["key"],
-                "label": spec["label"],
-                "ticker": ticker,
-                "samples": [],
-            })
+            asset_state = assets_state.setdefault(
+                ticker,
+                {
+                    "key": spec["key"],
+                    "label": spec["label"],
+                    "ticker": ticker,
+                    "samples": [],
+                },
+            )
             samples = asset_state.get("samples", []) or []
             if not refresh and not self._sample_is_stale(samples):
                 asset_state["samples"] = self._trim_samples(samples)
@@ -446,7 +494,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             snapshot = ingestion._collect_contract_snapshot(ticker)
             sample = self._build_sample(spec, snapshot)
             samples.append(sample)
-            session_candles, session_candles_error, session_date = self._fetch_session_candles(ingestion, ticker, now_utc)
+            session_candles, session_candles_error, session_date = self._fetch_session_candles(
+                ingestion, ticker, now_utc
+            )
             existing_session_date = str(asset_state.get("session_date") or "")
             existing_session_candles = asset_state.get("session_candles_1m") or []
             merged_session_candles: list[dict[str, Any]] = []
@@ -454,24 +504,32 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                 merged_session_candles = self._dedupe_candles(existing_session_candles)
             merged_session_candles = self._dedupe_candles(
                 merged_session_candles
-                + (((snapshot.get("ohlcv") or {}).get("candles_1m") or []))
+                + ((snapshot.get("ohlcv") or {}).get("candles_1m") or [])
                 + session_candles,
                 limit=max(180, int(self.config.MACRO_PARTICIPANT_HEATMAP_DAY_CANDLE_LIMIT)),
             )
-            asset_state.update({
-                "key": spec["key"],
-                "label": spec["label"],
-                "ticker": ticker,
-                "samples": self._trim_samples(samples),
-                "latest_candles_1m": ((snapshot.get("ohlcv") or {}).get("candles_1m") or [])[- self.config.MACRO_PARTICIPANT_HEATMAP_CANDLE_LIMIT :],
-                "session_candles_1m": merged_session_candles,
-                "session_date": session_date,
-                "session_candles_error": session_candles_error,
-            })
+            asset_state.update(
+                {
+                    "key": spec["key"],
+                    "label": spec["label"],
+                    "ticker": ticker,
+                    "samples": self._trim_samples(samples),
+                    "latest_candles_1m": ((snapshot.get("ohlcv") or {}).get("candles_1m") or [])[
+                        -self.config.MACRO_PARTICIPANT_HEATMAP_CANDLE_LIMIT :
+                    ],
+                    "session_candles_1m": merged_session_candles,
+                    "session_date": session_date,
+                    "session_candles_error": session_candles_error,
+                }
+            )
 
         current_state["generated_at"] = _utc_now().isoformat()
-        current_state["sample_interval_seconds"] = int(self.config.MACRO_PARTICIPANT_HEATMAP_INTERVAL_SECONDS)
-        current_state["history_minutes"] = int(self.config.MACRO_PARTICIPANT_HEATMAP_HISTORY_MINUTES)
+        current_state["sample_interval_seconds"] = int(
+            self.config.MACRO_PARTICIPANT_HEATMAP_INTERVAL_SECONDS
+        )
+        current_state["history_minutes"] = int(
+            self.config.MACRO_PARTICIPANT_HEATMAP_HISTORY_MINUTES
+        )
         current_state["collector"] = {
             **(current_state.get("collector") or {}),
             "enabled": bool(self.config.MACRO_PARTICIPANT_HEATMAP_ENABLE),
@@ -489,12 +547,16 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             state = self._read_state()
             specs = self._asset_specs()
             collector_state = {**(state.get("collector") or {})}
-            collector_state.update({
-                "enabled": bool(self.config.MACRO_PARTICIPANT_HEATMAP_ENABLE),
-                "auto_start": bool(self.config.MACRO_PARTICIPANT_HEATMAP_AUTO_START),
-                "interval_seconds": int(self.config.MACRO_PARTICIPANT_HEATMAP_INTERVAL_SECONDS),
-                "session_sample_limit": int(self.config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT),
-            })
+            collector_state.update(
+                {
+                    "enabled": bool(self.config.MACRO_PARTICIPANT_HEATMAP_ENABLE),
+                    "auto_start": bool(self.config.MACRO_PARTICIPANT_HEATMAP_AUTO_START),
+                    "interval_seconds": int(self.config.MACRO_PARTICIPANT_HEATMAP_INTERVAL_SECONDS),
+                    "session_sample_limit": int(
+                        self.config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT
+                    ),
+                }
+            )
             state["collector"] = collector_state
             try:
                 state = self._capture_assets(specs, state, refresh=refresh)
@@ -516,7 +578,7 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
     def collector_status(self) -> dict[str, Any]:
         state = self._read_state()
         collector = {
-            **((state.get("collector") or {})),
+            **(state.get("collector") or {}),
             "sample_count": self._count_samples(state),
         }
         return collector
@@ -528,22 +590,25 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
         participant_catalog: dict[str, dict[str, Any]] = {}
         negative_seen = False
         positive_seen = False
-        configured_render_lookback_minutes = max(5, int(self.config.MACRO_PARTICIPANT_HEATMAP_RENDER_LOOKBACK_MINUTES))
+        configured_render_lookback_minutes = max(
+            5, int(self.config.MACRO_PARTICIPANT_HEATMAP_RENDER_LOOKBACK_MINUTES)
+        )
 
         for sample in samples:
             captured_at = sample.get("captured_at")
             captured_dt = _parse_iso(captured_at)
             sample_price = sample.get("last_price")
-            sample_candle_time = ((sample.get("last_candle") or {}).get("time"))
+            sample_candle_time = (sample.get("last_candle") or {}).get("time")
             sample_candle_dt = _parse_iso(sample_candle_time)
             participants = sample.get("participants", []) or []
             for row in participants:
                 row_scope = row.get("origin_scope")
                 row_segment = row.get("broker_segment")
-                if (
-                    row_scope in {None, "", "local_or_unclassified"}
-                    or row_segment in {None, "", "local_or_unclassified"}
-                ):
+                if row_scope in {None, "", "local_or_unclassified"} or row_segment in {
+                    None,
+                    "",
+                    "local_or_unclassified",
+                }:
                     origin = self._classify_broker_origin(row.get("broker_name"))
                 else:
                     origin = {
@@ -564,24 +629,27 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                 if quantity > 0:
                     positive_seen = True
                 broker_key = f"{row.get('broker_id')}::{row.get('broker_name')}"
-                catalog_entry = participant_catalog.setdefault(broker_key, {
-                    "broker_id": row.get("broker_id"),
-                    "broker_name": row.get("broker_name"),
-                    "cumulative_quantity": 0.0,
-                    "max_relative_percentage": 0.0,
-                    "sample_count": 0,
-                    "last_average_price": None,
-                    "last_side": side,
-                    "is_foreign_broker": bool(origin.get("is_foreign_broker")),
-                    "is_retail_broker": bool(origin.get("is_retail_broker")),
-                    "broker_segment": origin.get("broker_segment"),
-                    "origin_scope": origin.get("origin_scope"),
-                    "origin_confidence": origin.get("origin_confidence"),
-                    "origin_registry_key": origin.get("origin_registry_key"),
-                    "origin_label": origin.get("origin_label"),
-                    "origin_country": origin.get("origin_country"),
-                    "origin_region": origin.get("origin_region"),
-                })
+                catalog_entry = participant_catalog.setdefault(
+                    broker_key,
+                    {
+                        "broker_id": row.get("broker_id"),
+                        "broker_name": row.get("broker_name"),
+                        "cumulative_quantity": 0.0,
+                        "max_relative_percentage": 0.0,
+                        "sample_count": 0,
+                        "last_average_price": None,
+                        "last_side": side,
+                        "is_foreign_broker": bool(origin.get("is_foreign_broker")),
+                        "is_retail_broker": bool(origin.get("is_retail_broker")),
+                        "broker_segment": origin.get("broker_segment"),
+                        "origin_scope": origin.get("origin_scope"),
+                        "origin_confidence": origin.get("origin_confidence"),
+                        "origin_registry_key": origin.get("origin_registry_key"),
+                        "origin_label": origin.get("origin_label"),
+                        "origin_country": origin.get("origin_country"),
+                        "origin_region": origin.get("origin_region"),
+                    },
+                )
                 catalog_entry["cumulative_quantity"] += abs(quantity)
                 catalog_entry["max_relative_percentage"] = max(
                     catalog_entry["max_relative_percentage"],
@@ -591,54 +659,66 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                 catalog_entry["last_average_price"] = row.get("average_price_float")
                 catalog_entry["last_side"] = side
 
-                heat_points.append({
-                    "point_id": f"{captured_at}:{row.get('broker_id')}",
-                    "captured_at": captured_at,
-                    "captured_at_epoch": captured_dt.timestamp() if captured_dt else 0.0,
-                    "sample_candle_time": sample_candle_time,
-                    "sample_candle_epoch": sample_candle_dt.timestamp() if sample_candle_dt else 0.0,
-                    "broker_id": row.get("broker_id"),
-                    "broker_name": row.get("broker_name"),
-                    "average_price": row.get("average_price"),
-                    "average_price_float": row.get("average_price_float"),
-                    "quantity": row.get("quantity"),
-                    "quantity_float": quantity,
-                    "percentage_float": row.get("percentage_float"),
-                    "relative_percentage_float": row.get("relative_percentage_float"),
-                    "last_price": sample_price,
-                    "side": side,
-                    "side_confidence": "confirmed" if negative_seen else "provisional",
-                    "intensity_raw": row.get("intensity_raw") or 0.0,
-                    "is_foreign_broker": bool(origin.get("is_foreign_broker")),
-                    "is_retail_broker": bool(origin.get("is_retail_broker")),
-                    "broker_segment": origin.get("broker_segment"),
-                    "origin_scope": origin.get("origin_scope"),
-                    "origin_confidence": origin.get("origin_confidence"),
-                    "origin_registry_key": origin.get("origin_registry_key"),
-                    "origin_label": origin.get("origin_label"),
-                    "origin_country": origin.get("origin_country"),
-                    "origin_region": origin.get("origin_region"),
-                })
+                heat_points.append(
+                    {
+                        "point_id": f"{captured_at}:{row.get('broker_id')}",
+                        "captured_at": captured_at,
+                        "captured_at_epoch": captured_dt.timestamp() if captured_dt else 0.0,
+                        "sample_candle_time": sample_candle_time,
+                        "sample_candle_epoch": sample_candle_dt.timestamp()
+                        if sample_candle_dt
+                        else 0.0,
+                        "broker_id": row.get("broker_id"),
+                        "broker_name": row.get("broker_name"),
+                        "average_price": row.get("average_price"),
+                        "average_price_float": row.get("average_price_float"),
+                        "quantity": row.get("quantity"),
+                        "quantity_float": quantity,
+                        "percentage_float": row.get("percentage_float"),
+                        "relative_percentage_float": row.get("relative_percentage_float"),
+                        "last_price": sample_price,
+                        "side": side,
+                        "side_confidence": "confirmed" if negative_seen else "provisional",
+                        "intensity_raw": row.get("intensity_raw") or 0.0,
+                        "is_foreign_broker": bool(origin.get("is_foreign_broker")),
+                        "is_retail_broker": bool(origin.get("is_retail_broker")),
+                        "broker_segment": origin.get("broker_segment"),
+                        "origin_scope": origin.get("origin_scope"),
+                        "origin_confidence": origin.get("origin_confidence"),
+                        "origin_registry_key": origin.get("origin_registry_key"),
+                        "origin_label": origin.get("origin_label"),
+                        "origin_country": origin.get("origin_country"),
+                        "origin_region": origin.get("origin_region"),
+                    }
+                )
 
-        max_intensity = max((point.get("intensity_raw") or 0.0) for point in heat_points) if heat_points else 0.0
+        max_intensity = (
+            max((point.get("intensity_raw") or 0.0) for point in heat_points)
+            if heat_points
+            else 0.0
+        )
         for point in heat_points:
             ratio = (point.get("intensity_raw") or 0.0) / max(max_intensity, 1.0)
             point["intensity_score"] = round(_clamp(ratio, 0.08, 1.0), 4)
 
         heat_points.sort(
             key=lambda item: (
-                item.get("sample_candle_epoch") or item.get("captured_at_epoch") or 0.0,
-                item.get("captured_at_epoch") or 0.0,
-                item.get("broker_id") or 0,
+                float(item.get("sample_candle_epoch") or item.get("captured_at_epoch") or 0.0),
+                float(item.get("captured_at_epoch") or 0.0),
+                int(item.get("broker_id") or 0),
             )
         )
         max(1, int(self.config.MACRO_PARTICIPANT_HEATMAP_INTERVAL_SECONDS))
         participant_limit = max(1, int(self.config.MACRO_PARTICIPANT_HEATMAP_PARTICIPANT_LIMIT))
         render_sample_frame_limit = max(5, len(samples))
-        distinct_timestamps = sorted({item.get("captured_at") for item in heat_points if item.get("captured_at")})
+        distinct_timestamps = sorted(
+            {str(item.get("captured_at")) for item in heat_points if item.get("captured_at")}
+        )
         if len(distinct_timestamps) > render_sample_frame_limit:
             selected_timestamps = set(distinct_timestamps[-render_sample_frame_limit:])
-            heat_points = [item for item in heat_points if item.get("captured_at") in selected_timestamps]
+            heat_points = [
+                item for item in heat_points if item.get("captured_at") in selected_timestamps
+            ]
 
         # Safety cap should never collapse the time window just because participant rows increased.
         point_limit = max(
@@ -655,14 +735,17 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
 
         participant_list = sorted(
             participant_catalog.values(),
-            key=lambda item: (item.get("cumulative_quantity") or 0.0, item.get("max_relative_percentage") or 0.0),
+            key=lambda item: (
+                item.get("cumulative_quantity") or 0.0,
+                item.get("max_relative_percentage") or 0.0,
+            ),
             reverse=True,
         )[: self.config.MACRO_PARTICIPANT_HEATMAP_CATALOG_LIMIT]
 
         side_note = (
             "Signed participant balance observed in the lookback window."
-            if negative_seen else
-            "Current SDK window only exposed non-negative balances; cold tones are provisional until a signed sell balance appears."
+            if negative_seen
+            else "Current SDK window only exposed non-negative balances; cold tones are provisional until a signed sell balance appears."
         )
 
         latest_participants = (latest.get("participants") or [])[:10]
@@ -671,12 +754,16 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
         oldest_sample_dt = _parse_iso((samples[0] or {}).get("captured_at")) if samples else None
         newest_sample_dt = _parse_iso((samples[-1] or {}).get("captured_at")) if samples else None
         if oldest_sample_dt and newest_sample_dt and newest_sample_dt >= oldest_sample_dt:
-            session_span_minutes = max(1, int((newest_sample_dt - oldest_sample_dt).total_seconds() / 60) + 1)
+            session_span_minutes = max(
+                1, int((newest_sample_dt - oldest_sample_dt).total_seconds() / 60) + 1
+            )
         else:
             session_span_minutes = configured_render_lookback_minutes
         pressure_model = self._build_pressure_model(samples)
         cohort_value_map = self._build_cohort_value_map(samples)
-        flow_regime_classifier = self._build_flow_regime_classifier(pressure_model, cohort_value_map)
+        flow_regime_classifier = self._build_flow_regime_classifier(
+            pressure_model, cohort_value_map
+        )
         divergence_model = self._build_divergence_model(pressure_model)
         level_defense_model = self._build_level_defense_model(cohort_value_map)
         concentration_model = self._build_concentration_model(samples)
@@ -698,14 +785,19 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                 session_candles,
                 limit=max(180, int(self.config.MACRO_PARTICIPANT_HEATMAP_DAY_CANDLE_LIMIT)),
             ),
-            "latest_candles_1m": latest_candles[- self.config.MACRO_PARTICIPANT_HEATMAP_CANDLE_LIMIT :],
+            "latest_candles_1m": latest_candles[
+                -self.config.MACRO_PARTICIPANT_HEATMAP_CANDLE_LIMIT :
+            ],
             "latest_participants": latest_participants,
             "participant_catalog": participant_list,
             "heat_points": heat_points,
             "samples_with_negative_balance": sum(
                 1
                 for sample in samples
-                if any((row.get("quantity_float") or 0.0) < 0 for row in (sample.get("participants") or []))
+                if any(
+                    (row.get("quantity_float") or 0.0) < 0
+                    for row in (sample.get("participants") or [])
+                )
             ),
             "render_lookback_minutes": session_span_minutes,
             "render_point_count": len(heat_points),
@@ -720,8 +812,12 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             "side_confidence": "confirmed" if negative_seen and positive_seen else "provisional",
             "side_note": side_note,
             "side_available": bool(positive_seen or negative_seen),
-            "foreign_broker_count": sum(1 for item in participant_list if item.get("origin_scope") == "foreign"),
-            "retail_broker_count": sum(1 for item in participant_list if item.get("origin_scope") == "retail"),
+            "foreign_broker_count": sum(
+                1 for item in participant_list if item.get("origin_scope") == "foreign"
+            ),
+            "retail_broker_count": sum(
+                1 for item in participant_list if item.get("origin_scope") == "retail"
+            ),
         }
 
     def get_panel(self, refresh: bool = False) -> dict[str, Any]:
@@ -730,33 +826,44 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             cache_age = time.time() - self._panel_cache_at
             if cached and cache_age <= 30.0:
                 try:
-                    cached_assets = cached.get("assets") or []
-                    cached_win = next(
+                    raw_cached_assets = cached.get("assets")
+                    cached_assets = raw_cached_assets if isinstance(raw_cached_assets, list) else []
+                    cached_win: dict[str, Any] = next(
                         (
-                            item for item in cached_assets
-                            if str((item or {}).get("key") or "").lower() == "win"
+                            item
+                            for item in cached_assets
+                            if isinstance(item, dict)
+                            and str(item.get("key") or "").lower() == "win"
                         ),
                         {},
                     )
                     cached_win_sample_at = _parse_iso(
-                        ((((cached_win.get("fair_value_history") or {}).get("latest_sample") or {}).get("captured_at")))
-                    )
-                    options_state = MacroOptionsHeatmapContextManager.get_instance().service.read_state()
-                    latest_options_sample_at = _parse_iso(
-                        ((((options_state.get("fair_value_history") or {}).get("latest_sample") or {}).get("captured_at")))
-                    )
-                    if (
-                        latest_options_sample_at is not None
-                        and (
-                            cached_win_sample_at is None
-                            or latest_options_sample_at > cached_win_sample_at
+                        (
+                            (
+                                (cached_win.get("fair_value_history") or {}).get("latest_sample")
+                                or {}
+                            ).get("captured_at")
                         )
+                    )
+                    options_state = self.options_heatmap_manager.service.read_state()
+                    latest_options_sample_at = _parse_iso(
+                        (
+                            (
+                                (options_state.get("fair_value_history") or {}).get("latest_sample")
+                                or {}
+                            ).get("captured_at")
+                        )
+                    )
+                    if latest_options_sample_at is not None and (
+                        cached_win_sample_at is None
+                        or latest_options_sample_at > cached_win_sample_at
                     ):
                         cached = None
                     else:
-                        return json.loads(json.dumps(cached, ensure_ascii=False, default=str))
+                        return deepcopy(cached)
                 except Exception:
-                    return json.loads(json.dumps(cached, ensure_ascii=False, default=str))
+                    if cached is not None:
+                        return deepcopy(cached)
 
         with self._lock:
             state = self._read_state()
@@ -779,7 +886,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             assets.append(self._build_asset_panel(asset_state))
 
         cross_asset_flow_package = self._build_cross_asset_flow_package(state, specs)
-        structural_divergence_model = self._build_structural_divergence_model(assets, cross_asset_flow_package)
+        structural_divergence_model = self._build_structural_divergence_model(
+            assets, cross_asset_flow_package
+        )
         continuation_reversal_model = self._build_continuation_reversal_model(
             assets,
             cross_asset_flow_package,
@@ -793,7 +902,7 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             continuation_reversal_model,
             news_thermometer_context,
         )
-        options_heatmap_manager = MacroOptionsHeatmapContextManager.get_instance()
+        options_heatmap_manager = self.options_heatmap_manager
         options_heatmap_manager.resume_if_needed()
         options_heatmap_context = options_heatmap_manager.service.build_payload(refresh=refresh)
         liquidity_intelligence_model = self._build_liquidity_intelligence_model(
@@ -820,11 +929,17 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
             liquidity_intelligence_model,
             options_heatmap_context,
         )
-        liquidity_asset_map = (liquidity_intelligence_model.get("assets") or {})
-        liquidity_pool_asset_map = (liquidity_pool_model.get("assets") or {})
-        options_gamma_context = json.loads(json.dumps(options_heatmap_context.get("gamma_context") or {}))
-        options_fair_value_history = json.loads(json.dumps(options_heatmap_context.get("fair_value_history") or {}))
-        options_live_capture_history = json.loads(json.dumps(options_heatmap_context.get("live_capture_history") or {}))
+        liquidity_asset_map = liquidity_intelligence_model.get("assets") or {}
+        liquidity_pool_asset_map = liquidity_pool_model.get("assets") or {}
+        options_gamma_context = json.loads(
+            json.dumps(options_heatmap_context.get("gamma_context") or {})
+        )
+        options_fair_value_history = json.loads(
+            json.dumps(options_heatmap_context.get("fair_value_history") or {})
+        )
+        options_live_capture_history = json.loads(
+            json.dumps(options_heatmap_context.get("live_capture_history") or {})
+        )
         for asset in assets:
             asset["liquidity_intelligence"] = liquidity_asset_map.get(asset.get("key"))
             asset["liquidity_pools"] = liquidity_pool_asset_map.get(asset.get("key"))
@@ -832,7 +947,9 @@ class MacroParticipantHeatmapService(MacroParticipantAnalyticsMixin):
                 asset["gamma_context"] = json.loads(json.dumps(options_gamma_context))
                 asset["fair_value_history"] = json.loads(json.dumps(options_fair_value_history))
                 asset["live_capture_history"] = json.loads(json.dumps(options_live_capture_history))
-                asset["options_flow_alignment"] = json.loads(json.dumps(options_flow_alignment_model or {}))
+                asset["options_flow_alignment"] = json.loads(
+                    json.dumps(options_flow_alignment_model or {})
+                )
             else:
                 asset["gamma_context"] = {}
                 asset["fair_value_history"] = {}

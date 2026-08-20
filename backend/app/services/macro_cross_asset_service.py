@@ -217,7 +217,7 @@ DEFAULT_CROSS_ASSET_ENGINE_LIMIT = 100
 class MacroCrossAssetService:
     """Build a cross-asset reaction engine on top of live macro drivers."""
 
-    def __init__(self, store: Optional[MacroStateStore] = None):
+    def __init__(self, store: Optional[MacroStateStore] = None) -> None:
         self.store = store or MacroStateStore()
         self.ingestion = MacroIngestionService(store=self.store)
         self.driver_service = MacroDriverService(store=self.store)
@@ -231,7 +231,9 @@ class MacroCrossAssetService:
         signature = self._build_signature(snapshot=snapshot, driver_state=driver_state, limit=limit)
         cached = self._read_cache()
         if cached and cached.get("source_signature") == signature and cached.get("data"):
-            return cached["data"]
+            cached_data = cached["data"]
+            if isinstance(cached_data, dict):
+                return cached_data
 
         market = snapshot.get("market") or {}
         analyzed = self._analyze_drivers(
@@ -289,7 +291,7 @@ class MacroCrossAssetService:
 
     def _build_signature(self, snapshot: Dict[str, Any], driver_state: Dict[str, Any], limit: int) -> Dict[str, Any]:
         drivers = driver_state.get("drivers", []) or []
-        latest_driver = max(
+        latest_driver: Dict[str, Any] = max(
             drivers,
             key=lambda item: self._sort_timestamp(item.get("last_event_time")),
             default={},
@@ -309,7 +311,8 @@ class MacroCrossAssetService:
             return {}
         try:
             with open(self.cache_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                payload = json.load(f)
+            return payload if isinstance(payload, dict) else {}
         except Exception:
             logger.exception("Failed to load cross-asset cache")
             return {}
@@ -393,7 +396,7 @@ class MacroCrossAssetService:
 
     def _load_history_points(self, limit: int = 320) -> List[Dict[str, Any]]:
         raw_history = self.store.list_snapshot_history(limit=limit)
-        history = []
+        history: List[Dict[str, Any]] = []
         for record in raw_history:
             generated_at = record.get("generated_at")
             dt = self._parse_datetime(generated_at)
@@ -474,21 +477,21 @@ class MacroCrossAssetService:
             )
 
         for security, item in ((market.get("securities") or {}).items()):
-            override = SECURITY_OVERRIDES.get(security)
-            if not override:
+            security_override = SECURITY_OVERRIDES.get(security)
+            if security_override is None:
                 continue
             specs[security] = CrossAssetSpec(
                 asset_id=security,
                 label=str(item.get("label") or security),
-                bucket=str(override.get("bucket") or "equity"),
+                bucket=str(security_override.get("bucket") or "equity"),
                 source="security_header",
-                orientation=float(override.get("orientation", 1.0)),
-                sensitivity=float(override.get("sensitivity", 6.0)),
-                weight=float(override.get("weight", 0.7)),
-                base_move_floor=float(override.get("base_move_floor", 0.08)),
-                max_score=float(override.get("max_score", 18.0)),
-                role=str(override.get("role", "echo")),
-                note=str(override.get("note") or "Security header confirmation."),
+                orientation=float(security_override.get("orientation", 1.0)),
+                sensitivity=float(security_override.get("sensitivity", 6.0)),
+                weight=float(security_override.get("weight", 0.7)),
+                base_move_floor=float(security_override.get("base_move_floor", 0.08)),
+                max_score=float(security_override.get("max_score", 18.0)),
+                role=str(security_override.get("role", "echo")),
+                note=str(security_override.get("note") or "Security header confirmation."),
             )
         return specs
 
@@ -526,10 +529,10 @@ class MacroCrossAssetService:
         specs: Dict[str, CrossAssetSpec],
     ) -> Dict[str, Dict[str, Any]]:
         changes_by_asset: Dict[str, List[float]] = defaultdict(list)
-        for previous, current in zip(history, history[1:]):
+        for previous, current in zip(history, history[1:], strict=False):
             previous_market = previous.get("market") or {}
             current_market = current.get("market") or {}
-            for asset_id in specs.keys():
+            for asset_id in specs:
                 previous_price = self._asset_price(asset_id, previous_market)
                 current_price = self._asset_price(asset_id, current_market)
                 if previous_price in (None, 0) or current_price is None:
@@ -1263,7 +1266,11 @@ class MacroCrossAssetService:
                     "action": self._bias_from_score(score),
                     "title": item.get("title"),
                 })
-            dominant = max(series, key=lambda row: abs(row.get("score") or 0.0), default={})
+            dominant = max(
+                series,
+                key=lambda row: abs(float(row.get("score") or 0.0)),
+                default={},
+            )
             dominant_driver = driver_map.get(dominant.get("driver_id"))
             current_action = self._bias_from_score(score)
             views.append({
@@ -1593,16 +1600,16 @@ class MacroCrossAssetService:
 
         for index, (bucket, row) in enumerate(active_buckets):
             for other_bucket, other_row in active_buckets[index + 1:]:
-                relation = self._pair_bucket_relation(
+                pair_relation = self._pair_bucket_relation(
                     float(row.get("score") or 0.0),
                     float(other_row.get("score") or 0.0),
                 )
-                if not relation:
+                if not pair_relation:
                     continue
                 edges.append({
                     "source": f"bucket::{bucket}",
                     "target": f"bucket::{other_bucket}",
-                    "relation": relation,
+                    "relation": pair_relation,
                     "strength": round((abs(float(row.get("score") or 0.0)) + abs(float(other_row.get("score") or 0.0))) / 2.0, 2),
                 })
 

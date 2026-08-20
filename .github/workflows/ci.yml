@@ -39,9 +39,12 @@ jobs:
           npm ci
           npm ci --prefix frontend
 
+      - name: Enforce quality budget
+        run: python scripts/quality_budget.py
+
       - name: Lint backend
         working-directory: backend
-        run: uv run ruff check app tests run.py run_*_service.py
+        run: uv run ruff check app tests run.py run_*_service.py ../scripts/quality_budget.py
 
       - name: Type-check backend contracts
         working-directory: backend
@@ -54,7 +57,7 @@ jobs:
           --cov=app
           --cov-branch
           --cov-report=term-missing
-          --cov-fail-under=30
+          --cov-fail-under=31
 
       - name: Enforce authentication coverage
         working-directory: backend
@@ -68,15 +71,36 @@ jobs:
       - name: Enforce Funds Flow critical coverage
         working-directory: backend
         run: >-
-          uv run pytest tests/test_funds_flow_domain.py
+          uv run pytest tests/test_funds_flow_domain.py tests/test_funds_flow_application.py
+          tests/test_funds_flow_sources.py tests/test_funds_flow_source_adapters.py
+          tests/test_funds_flow_external_contracts.py tests/test_financial_math_properties.py
+          tests/test_market_data_api_contracts.py tests/test_domain_boundaries.py
+          --cov=app.domains.funds_flow
           --cov=app.services.funds_flow_local_service
-          --cov=app.services.funds_flow_anbima_ici
           --cov=app.services.funds_flow_analytics
+          --cov=app.services.funds_flow_cftc
           --cov=app.services.funds_flow_utils
           --cov=app.services.funds_flow_insights
+          --cov=app.utils.funds_flow_source_values
           --cov-branch
           --cov-report=term-missing
-          --cov-fail-under=30
+          --cov-fail-under=60
+
+      - name: Enforce pure financial calculations coverage
+        working-directory: backend
+        run: >-
+          uv run pytest tests/test_cvm_cda_domain.py tests/test_funds_flow_domain.py
+          tests/test_financial_math_properties.py tests/test_fair_value_legs_pipeline.py
+          tests/test_fair_value_markov_pipeline.py tests/test_macro_participant_models.py
+          --cov=app.domains.funds_flow.domain.rules
+          --cov=app.domains.market_data.domain.cvm_cda
+          --cov=app.services.fair_value_legs_math
+          --cov=app.services.fair_value_markov_math
+          --cov=app.services.macro_participant_math
+          --cov=app.utils.funds_flow_source_values
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=80
 
       - name: Lint frontend
         run: npm --prefix frontend run lint

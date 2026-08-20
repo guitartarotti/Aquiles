@@ -85,9 +85,10 @@ class MacroOptionsHeatmapContextManager:
 
     def stop(self) -> dict[str, Any]:
         with self._lock:
-            if self._thread_alive():
+            collector_thread = self._thread
+            if collector_thread is not None and collector_thread.is_alive():
                 self._stop_event.set()
-                self._thread.join(timeout=3)
+                collector_thread.join(timeout=3)
             self._thread = None
             state = self.service.read_state()
             collector = state.get("collector") or {}

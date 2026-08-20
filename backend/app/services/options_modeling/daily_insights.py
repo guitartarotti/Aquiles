@@ -69,7 +69,7 @@ class OptionsDailyInsightService:
         self.store.write_daily_insight(underlying_security, trade_date, sign_convention, payload)
         return payload
 
-    def _generate_payload(self, **kwargs) -> dict[str, Any]:
+    def _generate_payload(self, **kwargs: Any) -> dict[str, Any]:
         try:
             return self._generate_with_llm(**kwargs)
         except Exception:
@@ -208,7 +208,7 @@ class OptionsDailyInsightService:
             temperature=0.2,
             max_tokens=1400,
         )
-        normalized = {
+        normalized: dict[str, Any] = {
             "trade_date": trade_date,
             "underlying_security": underlying_security,
             "sign_convention": sign_convention,

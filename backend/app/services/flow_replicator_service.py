@@ -194,7 +194,8 @@ class FlowReplicatorService:
                 self._state["connected"] = False
                 self._state["last_error"] = str(exc)
 
-    async def _connect(self, ticker: str):
+    async def _connect(self, ticker: str) -> Any:
+        del ticker
         import websockets
 
         headers = {"Authorization": self.auth_header}
@@ -203,7 +204,7 @@ class FlowReplicatorService:
         except TypeError:
             return await websockets.connect(self.ws_url, additional_headers=headers, ping_interval=20, ping_timeout=20)
 
-    async def _subscribe(self, ws, ticker: str) -> None:
+    async def _subscribe(self, ws: Any, ticker: str) -> None:
         await ws.send(json.dumps({
             "kind": "market.summary.subscribe",
             "data": {"ticker": ticker},

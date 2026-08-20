@@ -106,10 +106,13 @@ def test_funds_flow_formatting_and_date_helpers_cover_boundaries() -> None:
         tzinfo=timezone.utc,
     )
     assert _max_iso_date_value("2026-07-01", "2026-08-17") == "2026-08-17"
-    assert _max_iso_datetime_value(
-        "2026-08-17T10:00:00+00:00",
-        "2026-08-17T12:00:00+00:00",
-    ) == "2026-08-17T12:00:00+00:00"
+    assert (
+        _max_iso_datetime_value(
+            "2026-08-17T10:00:00+00:00",
+            "2026-08-17T12:00:00+00:00",
+        )
+        == "2026-08-17T12:00:00+00:00"
+    )
     assert _yyyymm_months(date(2025, 12, 1), date(2026, 2, 1)) == [
         "202512",
         "202601",
@@ -206,19 +209,19 @@ def test_funds_flow_collection_pipeline_aggregates_and_caches_without_network(
     }
 
     monkeypatch.setattr(
-        service,
-        "_load_informe_diario",
+        service.cvm_source,
+        "load_informe_diario",
         lambda **_kwargs: (informe, [status("cvm_informe_diario_202607")]),
     )
     monkeypatch.setattr(service, "_select_complete_as_of_date", lambda *_args: target_date)
     monkeypatch.setattr(
-        service,
-        "_load_cadastro",
+        service.cvm_source,
+        "load_fund_registry",
         lambda **_kwargs: (master, status("cvm_cadastro_fi")),
     )
     monkeypatch.setattr(
-        service,
-        "_load_anbima_funds",
+        service.anbima_source,
+        "load_funds",
         lambda **_kwargs: (
             {
                 "status": "ok",
@@ -238,8 +241,8 @@ def test_funds_flow_collection_pipeline_aggregates_and_caches_without_network(
         ),
     )
     monkeypatch.setattr(
-        service,
-        "_load_ici_global_flows",
+        service.ici_source,
+        "load_global_flows",
         lambda **_kwargs: (
             {
                 "status": "ok",
@@ -264,24 +267,33 @@ def test_funds_flow_collection_pipeline_aggregates_and_caches_without_network(
         ),
     )
 
-    empty_sources = {
+    local_empty_sources = {
         "_load_cftc_tff_positioning": ("cftc_tff", {"status": "not_loaded"}),
-        "_load_b3_investor_participation": ("b3_investor_participation", {"status": "not_loaded"}),
-        "_load_b3_open_interest": ("b3_open_interest", {"status": "not_loaded"}),
-        "_load_b3_investor_participation_monthly": (
-            "b3_investor_participation_monthly",
-            {"status": "not_loaded"},
-        ),
-        "_load_b3_market_data_report": ("b3_market_data_report", {"status": "not_loaded"}),
-        "_load_b3_etfs": ("b3_etfs", {"status": "not_loaded"}),
         "_load_bcb_macro": ("bcb_macro", {"status": "not_loaded"}),
     }
-    for method_name, (source_id, source_payload) in empty_sources.items():
+    for method_name, (source_id, source_payload) in local_empty_sources.items():
         monkeypatch.setattr(
             service,
             method_name,
             lambda _source_id=source_id, _payload=source_payload, **_kwargs: (
                 _payload,
+                status(_source_id),
+            ),
+        )
+
+    b3_empty_sources = {
+        "load_investor_participation": "b3_investor_participation",
+        "load_open_interest": "b3_open_interest",
+        "load_monthly_investor_participation": "b3_investor_participation_monthly",
+        "load_market_data_report": "b3_market_data_report",
+        "load_etfs": "b3_etfs",
+    }
+    for method_name, source_id in b3_empty_sources.items():
+        monkeypatch.setattr(
+            service.b3_source,
+            method_name,
+            lambda _source_id=source_id, **_kwargs: (
+                {"status": "not_loaded"},
                 status(_source_id),
             ),
         )

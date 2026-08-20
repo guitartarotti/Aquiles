@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+from typing import Any
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -51,8 +52,7 @@ from app.utils.logger import get_logger
 logger = get_logger("aquiles.flow_replicator_service")
 
 app = Flask(__name__)
-if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
-    app.json.ensure_ascii = False
+setattr(app.json, "ensure_ascii", False)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 register_auth(app)
 register_error_handlers(app)
@@ -62,17 +62,17 @@ replicator = FlowReplicatorService(store=store)
 activity_radar = FlowActivityRadarService(store=store)
 
 
-def _json_error(exc: Exception, status_code: int = 500):
+def _json_error(exc: Exception, status_code: int = 500) -> Any:
     return error_response(logger, status_code=status_code, exception=exc)
 
 
-def _truthy(value) -> bool:
+def _truthy(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _parse_epoch(value):
+def _parse_epoch(value: Any) -> float | None:
     raw = str(value or "").strip()
     if not raw:
         return None
@@ -83,7 +83,7 @@ def _parse_epoch(value):
 
 
 @app.route("/health", methods=["GET"])
-def health():
+def health() -> dict[str, Any]:
     status = replicator.status()
     return {
         "status": "ok",
@@ -95,7 +95,7 @@ def health():
 
 
 @app.route("/api/flow/replicator/status", methods=["GET"])
-def flow_replicator_status():
+def flow_replicator_status() -> Any:
     try:
         return jsonify({"success": True, "data": replicator.status()})
     except Exception as exc:
@@ -104,7 +104,7 @@ def flow_replicator_status():
 
 @app.route("/api/flow/replicator/start", methods=["POST"])
 @require_role("admin")
-def flow_replicator_start():
+def flow_replicator_start() -> Any:
     try:
         return jsonify({"success": True, "data": replicator.start()})
     except Exception as exc:
@@ -113,7 +113,7 @@ def flow_replicator_start():
 
 @app.route("/api/flow/replicator/stop", methods=["POST"])
 @require_role("admin")
-def flow_replicator_stop():
+def flow_replicator_stop() -> Any:
     try:
         return jsonify({"success": True, "data": replicator.stop()})
     except Exception as exc:
@@ -121,7 +121,7 @@ def flow_replicator_stop():
 
 
 @app.route("/api/flow/summary/latest", methods=["GET"])
-def flow_summary_latest():
+def flow_summary_latest() -> Any:
     try:
         ticker = request.args.get("ticker") or None
         snapshot = store.latest_snapshot(ticker)
@@ -131,7 +131,7 @@ def flow_summary_latest():
 
 
 @app.route("/api/flow/agents/latest", methods=["GET"])
-def flow_agents_latest():
+def flow_agents_latest() -> Any:
     try:
         ticker = request.args.get("ticker") or None
         limit = int(request.args.get("limit") or 80)
@@ -143,7 +143,7 @@ def flow_agents_latest():
 
 @app.route("/api/flow/deltas/aggregate", methods=["GET"])
 @app.route("/api/flow/candles/aggregate", methods=["GET"])
-def flow_deltas_aggregate():
+def flow_deltas_aggregate() -> Any:
     try:
         ticker = request.args.get("ticker") or None
         since_epoch = _parse_epoch(request.args.get("since_epoch"))
@@ -165,9 +165,10 @@ def flow_deltas_aggregate():
 
 @app.route("/api/flow/deltas/windows", methods=["POST"])
 @app.route("/api/flow/candles/windows", methods=["POST"])
-def flow_deltas_windows():
+def flow_deltas_windows() -> Any:
     try:
-        payload = request.get_json(silent=True) or {}
+        raw_payload = request.get_json(silent=True)
+        payload = raw_payload if isinstance(raw_payload, dict) else {}
         raw_windows = payload.get("windows")
         if not isinstance(raw_windows, list):
             return jsonify({"success": False, "error": "windows must be a list"}), 400
@@ -178,7 +179,7 @@ def flow_deltas_windows():
         except (TypeError, ValueError):
             agent_limit = 12
 
-        windows = []
+        windows: list[dict[str, Any]] = []
         for item in raw_windows:
             if not isinstance(item, dict):
                 continue
@@ -205,7 +206,7 @@ def flow_deltas_windows():
 
 
 @app.route("/api/flow/activity-radar", methods=["GET"])
-def flow_activity_radar():
+def flow_activity_radar() -> Any:
     try:
         ticker = request.args.get("ticker") or None
         session_date = request.args.get("session_date") or None

@@ -10,6 +10,7 @@ from flask import jsonify, request
 
 from ..auth import require_role
 from ..config import Config
+from ..container import get_container
 from ..http import error_response
 from . import options_bp
 
@@ -189,8 +190,6 @@ def volume_state():
 
 @options_bp.post("/volume/poll")
 def volume_poll():
-    from ..services.options_volume_tracker import OptionsVolumeTracker
-
     try:
         body = request.get_json(silent=True) or {}
         configured = Config.OPTIONS_BLOOMBERG_UNDERLYINGS
@@ -199,7 +198,7 @@ def volume_poll():
             or request.args.get("underlying_security")
             or (configured[0] if configured else "IBOVE Index")
         )
-        result = OptionsVolumeTracker.get_instance().poll_once(underlying)
+        result = get_container().options_volume_tracker().poll_once(underlying)
         return jsonify({"success": True, "data": result})
     except Exception as exc:
         return error_response(logger, status_code=500, exception=exc)
@@ -207,10 +206,8 @@ def volume_poll():
 
 @options_bp.post("/volume/poll/all")
 def volume_poll_all():
-    from ..services.options_volume_tracker import OptionsVolumeTracker
-
     try:
-        result = OptionsVolumeTracker.get_instance().poll_all_underlyings()
+        result = get_container().options_volume_tracker().poll_all_underlyings()
         return jsonify({"success": True, "data": result})
     except Exception as exc:
         return error_response(logger, status_code=500, exception=exc)
@@ -234,10 +231,8 @@ def volume_tracker_stop():
 
 
 def _tracker_command(command: str):
-    from ..services.options_volume_tracker import OptionsVolumeTracker
-
     try:
-        tracker = OptionsVolumeTracker.get_instance()
+        tracker = get_container().options_volume_tracker()
         return jsonify({"success": True, "data": getattr(tracker, command)()})
     except Exception as exc:
         return error_response(logger, status_code=500, exception=exc)
@@ -246,12 +241,8 @@ def _tracker_command(command: str):
 @options_bp.post("/volume/tracker/backfill")
 @require_role("admin")
 def volume_tracker_backfill():
-    from ..services.options_volume_tracker import OptionsVolumeTracker
-
     try:
-        tracker = OptionsVolumeTracker.get_instance()
-        if not (tracker._loop_thread and tracker._loop_thread.is_alive()):
-            tracker.start()
+        tracker = get_container().options_volume_tracker()
         return jsonify({"success": True, "data": tracker.backfill_today()})
     except Exception as exc:
         return error_response(logger, status_code=500, exception=exc)

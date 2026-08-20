@@ -1814,10 +1814,7 @@ class FairValueMarkovModelMixin:
             if final_key == "balanced":
                 final_confidence = _clip(full_score_map.get("balanced", 0.0) * 100.0, 0.0, 100.0)
             else:
-                if top_non_balanced_score < 0.40:
-                    final_key = "balanced"
-                    final_confidence = _clip(full_score_map.get("balanced", 0.0) * 100.0, 0.0, 100.0)
-                elif str(row.get("meta_regime_rule_key") or "") == "balanced" and top_non_balanced_score < 0.48:
+                if top_non_balanced_score < 0.40 or str(row.get("meta_regime_rule_key") or "") == "balanced" and top_non_balanced_score < 0.48:
                     final_key = "balanced"
                     final_confidence = _clip(full_score_map.get("balanced", 0.0) * 100.0, 0.0, 100.0)
                 else:
@@ -2009,17 +2006,17 @@ class FairValueMarkovModelMixin:
                 legs_score = 0.0
                 leg_slope = 0.0
 
-            def feature_z(key: str) -> float:
+            def feature_z(key: str, values: Any = z_values) -> float:
                 position = feature_index.get(key)
                 if position is None:
                     return 0.0
-                return _clip(float(z_values[position]), -4.0, 4.0)
+                return _clip(float(values[position]), -4.0, 4.0)
 
-            def feature_slope(key: str) -> float:
+            def feature_slope(key: str, values: Any = slope_values) -> float:
                 position = feature_index.get(key)
                 if position is None:
                     return 0.0
-                return _clip(float(slope_values[position]), -4.0, 4.0)
+                return _clip(float(values[position]), -4.0, 4.0)
 
             rpc_z = feature_z("rpc_pressure")
             flow_score = _clip(

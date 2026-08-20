@@ -5,6 +5,7 @@ import math
 import re
 import warnings
 from collections import OrderedDict
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -128,7 +129,7 @@ def _security_price(snapshot: dict[str, Any], security: str) -> float | None:
     return _safe_float(row.get("price"))
 
 
-def _mean_or_none(values: list[float | None]) -> float | None:
+def _mean_or_none(values: Sequence[float | None]) -> float | None:
     clean = [value for value in values if value is not None]
     if not clean:
         return None

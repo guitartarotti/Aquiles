@@ -16,17 +16,17 @@ import {
   formatRatio,
   formatUsdMillions,
   ratioPercent,
-} from '../src/utils/fundsFlowFormatters.js'
+} from '../src/features/funds-flow/models/formatters.js'
 import {
   getSourceStatusClass,
   getSourceStatusLabel,
   hasPublicationGap,
-} from '../src/utils/fundsFlowSourceStatus.js'
+} from '../src/features/funds-flow/models/sourceStatus.js'
 import {
   buildNormalizedSeries,
   formatCurveMacroRegime,
   getCurveRegimeRanking,
-} from '../src/utils/macroCurve.js'
+} from '../src/features/macro-heatmap/models/macroCurve.js'
 import {
   formatPrice,
   formatSignedBps,

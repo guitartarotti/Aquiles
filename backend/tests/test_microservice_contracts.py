@@ -9,6 +9,7 @@ import pytest
 
 RUNNER_CONTRACTS = (
     ("run_atemporal_price_chart_service", "aquiles-atemporal-price-chart-service"),
+    ("run_collection_scheduler_service", "aquiles-collection-scheduler"),
     ("run_cvm_cda_graph_service", "aquiles-cvm-cda-graph-service"),
     ("run_discovery_market_service", "aquiles-discovery-service"),
     ("run_etf_daily_flow_service", "aquiles-etf-daily-flow-service"),
@@ -52,11 +53,21 @@ def _load_runner(monkeypatch, module_name: str):
 def _stub_health_dependencies(monkeypatch, module_name: str, module) -> None:
     if module_name == "run_cvm_cda_graph_service":
         monkeypatch.setattr(module, "graph_service", RecordingStub(status={"ok": True}))
+    elif module_name == "run_collection_scheduler_service":
+        monkeypatch.setattr(
+            module,
+            "_collector",
+            lambda _name: RecordingStub(status={"running": False}),
+        )
     elif module_name == "run_discovery_market_service":
         monkeypatch.setattr(
             module,
             "_latest_capture_payload",
-            lambda: {"capture_id": "capture-1", "captured_at": "2026-08-18T12:00:00Z", "row_count": 8},
+            lambda: {
+                "capture_id": "capture-1",
+                "captured_at": "2026-08-18T12:00:00Z",
+                "row_count": 8,
+            },
         )
     elif module_name == "run_etf_daily_flow_service":
         monkeypatch.setattr(module, "etf_flow_manager", RecordingStub(status={"running": False}))
@@ -73,10 +84,14 @@ def _stub_health_dependencies(monkeypatch, module_name: str, module) -> None:
         monkeypatch.setattr(
             module,
             "tracker",
-            RecordingStub(status={"running": False, "tracked_symbols": 0, "latest_monthly_iv_at": None}),
+            RecordingStub(
+                status={"running": False, "tracked_symbols": 0, "latest_monthly_iv_at": None}
+            ),
         )
     elif module_name == "run_vol_analytics_service":
-        monkeypatch.setattr(module, "VolIndexService", lambda _underlying: RecordingStub(get_latest={}))
+        monkeypatch.setattr(
+            module, "VolIndexService", lambda _underlying: RecordingStub(get_latest={})
+        )
         monkeypatch.setattr(module, "_sync_status", lambda _underlying: {"running": False})
 
 

@@ -297,7 +297,7 @@ class IntradayDependencyService:
         workbook_securities = {
             security
             for snapshot in (snapshots or [])
-            for security in self._snapshot_workbook_values(snapshot).keys()
+            for security in self._snapshot_workbook_values(snapshot)
         }
         for security in sorted(workbook_securities):
             asset_key = self._workbook_factor_key(security)

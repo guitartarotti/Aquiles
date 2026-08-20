@@ -174,7 +174,7 @@ class MacroMarketOverviewService:
         for row in contract_rows:
             grouped[row.get("bucket") or "other"].append(row)
 
-        results = []
+        results: List[Dict[str, Any]] = []
         for bucket, rows in grouped.items():
             avg_score = self._avg(row.get("sentiment_score") for row in rows)
             results.append(
@@ -335,8 +335,8 @@ class MacroMarketOverviewService:
         results.sort(
             key=lambda item: (
                 1 if item.get("market_relevance") else 0,
-                int(item.get("impact_score") or 0),
-                self._relevance_rank(item.get("relevance")),
+                self._normalize_confidence(item.get("impact_score"), 0),
+                self._relevance_rank(str(item.get("relevance") or "")),
                 self._sort_timestamp(item.get("event_time")),
             ),
             reverse=True,
@@ -486,9 +486,9 @@ class MacroMarketOverviewService:
         participants: List[Dict[str, Any]],
         news_rows: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        top_contracts = ", ".join(item.get("ticker") for item in contracts[:3] if item.get("ticker")) or "macro basket"
-        top_refs = ", ".join(item.get("ticker") for item in reference_assets[:3] if item.get("ticker")) or "Bloomberg reference basket"
-        top_participants = ", ".join(item.get("broker_name") for item in participants[:3] if item.get("broker_name")) or "brokers spread out"
+        top_contracts = ", ".join(str(item.get("ticker")) for item in contracts[:3] if item.get("ticker")) or "macro basket"
+        top_refs = ", ".join(str(item.get("ticker")) for item in reference_assets[:3] if item.get("ticker")) or "Bloomberg reference basket"
+        top_participants = ", ".join(str(item.get("broker_name")) for item in participants[:3] if item.get("broker_name")) or "brokers spread out"
         top_news = news_rows[0]["headline"] if news_rows else "No clearly impactful headline was detected today."
         return {
             "market_commentary": (

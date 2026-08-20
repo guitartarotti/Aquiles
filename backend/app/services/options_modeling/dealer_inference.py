@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from ...config import Config
 from .math_utils import clamp, percentile
@@ -36,7 +36,7 @@ def _build_strike_sides(option_exposures: list[dict[str, Any]]) -> dict[float, d
                 "liquidity_values": [],
                 "reliability_values": [],
             }
-        return strike_payload[side]
+        return cast(dict[str, Any], strike_payload[side])
 
     for item in option_exposures:
         option = item.get("option", {}) or {}
@@ -59,7 +59,7 @@ def _build_strike_sides(option_exposures: list[dict[str, Any]]) -> dict[float, d
         bucket["liquidity_values"].append(max(_safe_float(option.get("liquidity_weight")) or 0.0, 0.0))
         bucket["reliability_values"].append(max(_safe_float(option.get("reliability_weight")) or 0.0, 0.0))
 
-    for strike, payload in strikes.items():
+    for _strike, payload in strikes.items():
         for side in ("Call", "Put"):
             bucket = payload.get(side) or {
                 "contracts": 0,

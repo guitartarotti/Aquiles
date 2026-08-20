@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timezone
+from typing import Any
 
 from ...config import Config
 from ...utils.logger import get_logger
@@ -43,10 +44,10 @@ class OptionsGlobalTriangulationService:
         refresh_local_model: bool,
         max_age_seconds: int,
         now: datetime,
-    ) -> dict:
-        payload = self.store.read_latest_model_run(underlying_security) or {}
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = self.store.read_latest_model_run(underlying_security) or {}
 
-        def model_is_stale(run_payload: dict) -> bool:
+        def model_is_stale(run_payload: dict[str, Any]) -> bool:
             if not run_payload or not run_payload.get("captured_at"):
                 return True
             try:
@@ -83,8 +84,8 @@ class OptionsGlobalTriangulationService:
         self,
         underlying_security: str,
         refresh_local_model: bool = False,
-    ) -> tuple[dict, dict[str, dict]]:
-        model_runs_by_underlying: dict[str, dict] = {}
+    ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+        model_runs_by_underlying: dict[str, dict[str, Any]] = {}
         asset_configs = load_asset_configs()
         required_underlyings = {
             str(config.model_underlying or "").strip()
@@ -98,7 +99,7 @@ class OptionsGlobalTriangulationService:
         for item in required_underlyings:
             if not item:
                 continue
-            payload: dict = {}
+            payload: dict[str, Any] = {}
             try:
                 payload = self._ensure_local_model_run(
                     item,
@@ -121,7 +122,7 @@ class OptionsGlobalTriangulationService:
         underlying_security: str | None = None,
         refresh_local_model: bool = False,
         persist: bool = True,
-    ) -> dict:
+    ) -> dict[str, Any]:
         if not Config.OPTIONS_GLOBAL_TRIANGULATION_ENABLE:
             raise ValueError("Global triangulation is disabled")
 
@@ -222,8 +223,8 @@ class OptionsGlobalTriangulationService:
             payload["persisted"] = self.store.write_global_run(payload)
         return payload
 
-    def read_latest_run(self, underlying_security: str) -> dict | None:
+    def read_latest_run(self, underlying_security: str) -> dict[str, Any] | None:
         return self.store.read_latest_global_run(underlying_security)
 
-    def read_run(self, run_id: str) -> dict | None:
+    def read_run(self, run_id: str) -> dict[str, Any] | None:
         return self.store.read_global_run(run_id)

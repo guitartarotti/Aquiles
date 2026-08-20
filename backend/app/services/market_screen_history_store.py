@@ -1240,9 +1240,7 @@ class MarketScreenHistoryStore:
             return False
         if since_epoch is not None and captured_epoch < since_epoch:
             return False
-        if until_epoch is not None and captured_epoch > until_epoch:
-            return False
-        return True
+        return not (until_epoch is not None and captured_epoch > until_epoch)
 
     def _append_csv_reader_rows(
         self,

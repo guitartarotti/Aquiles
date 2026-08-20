@@ -91,8 +91,8 @@ class MacroTrendService:
             ticker: self.ingestion._build_contract_signal(ticker, contract)
             for ticker, contract in contracts.items()
         }
-        top_mover_tickers = {
-            item.get("ticker")
+        top_mover_tickers: set[str] = {
+            str(item.get("ticker"))
             for item in sorted(
                 contract_signals.values(),
                 key=lambda row: abs(row.get("net_change_pct_5m") or 0.0),
@@ -317,7 +317,7 @@ class MacroTrendService:
             logger.warning(f"Failed to load macro personas for trend focus: {exc}")
             return []
 
-        scored = []
+        scored: List[Dict[str, Any]] = []
         trend_terms = {
             *[str(item).upper() for item in trend.get("focus_contracts", [])],
             *[str(item).upper() for item in trend.get("focus_securities", [])],
@@ -346,7 +346,7 @@ class MacroTrendService:
                 }
             )
 
-        scored.sort(key=lambda item: item["score"], reverse=True)
+        scored.sort(key=lambda item: int(item["score"]), reverse=True)
 
         selected: List[Dict[str, Any]] = []
         used_types = set()

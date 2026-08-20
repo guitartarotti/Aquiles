@@ -505,7 +505,7 @@ MACRO_PERSONA_CATALOG: Sequence[MacroPersonaArchetype] = (
 class MacroPersonaService:
     """Build synthetic macro personas that use market/news entities as discussion context."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.reader = ZepEntityReader()
 
     def build_filtered_entities(
@@ -563,7 +563,7 @@ class MacroPersonaService:
         return result.entities
 
     def _build_context_index(self, nodes: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
-        buckets = {
+        buckets: Dict[str, List[Dict[str, Any]]] = {
             "contracts": [],
             "securities": [],
             "brokers": [],
@@ -657,7 +657,7 @@ class MacroPersonaService:
             + tuple(archetype.theme_focus)
         )
 
-        def add_nodes(nodes: Iterable[Dict[str, Any]], limit: int):
+        def add_nodes(nodes: Iterable[Dict[str, Any]], limit: int) -> None:
             count = 0
             for node in nodes:
                 node_uuid = node.get("uuid")

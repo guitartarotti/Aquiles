@@ -68,7 +68,9 @@ class MacroParticipantHeatmapCollectorManager:
                     "enabled": bool(Config.MACRO_PARTICIPANT_HEATMAP_ENABLE),
                     "auto_start": bool(Config.MACRO_PARTICIPANT_HEATMAP_AUTO_START),
                     "interval_seconds": interval_seconds,
-                    "session_sample_limit": int(Config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT),
+                    "session_sample_limit": int(
+                        Config.MACRO_PARTICIPANT_HEATMAP_SESSION_SAMPLE_LIMIT
+                    ),
                     "running": True,
                     "last_started_at": datetime.now(timezone.utc).isoformat(),
                     "last_error": None,
@@ -89,9 +91,10 @@ class MacroParticipantHeatmapCollectorManager:
 
     def stop(self) -> dict[str, Any]:
         with self._lock:
-            if self._thread_alive():
+            thread = self._thread
+            if thread is not None and thread.is_alive():
                 self._stop_event.set()
-                self._thread.join(timeout=3)
+                thread.join(timeout=3)
             self._thread = None
             state = self.service._read_state()
             collector = state.get("collector") or {}
@@ -116,7 +119,9 @@ class MacroParticipantHeatmapCollectorManager:
         return collector
 
     def resume_if_needed(self) -> dict[str, Any]:
-        should_run = bool(Config.MACRO_PARTICIPANT_HEATMAP_ENABLE and Config.MACRO_PARTICIPANT_HEATMAP_AUTO_START)
+        should_run = bool(
+            Config.MACRO_PARTICIPANT_HEATMAP_ENABLE and Config.MACRO_PARTICIPANT_HEATMAP_AUTO_START
+        )
         if should_run:
             return self.start()
         return self.status()

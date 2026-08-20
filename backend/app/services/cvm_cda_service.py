@@ -8,7 +8,6 @@ import re
 import sqlite3
 import time
 import zipfile
-from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -18,10 +17,27 @@ import pandas as pd
 import requests
 
 from ..config import Config
+from ..domains.market_data.domain import cvm_cda as cvm_cda_domain
 from ..utils.atomic_io import atomic_json_dump
 from ..utils.logger import get_logger
 
 logger = get_logger("aquiles.cvm_cda")
+
+# Compatibility aliases keep this migration behavior-preserving for current callers.
+CdaRemoteMonth = cvm_cda_domain.CdaRemoteMonth
+_asset_class_for = cvm_cda_domain.asset_class_for
+_clamp = cvm_cda_domain.clamp
+_first_nonempty = cvm_cda_domain.first_nonempty
+_maturity_bucket = cvm_cda_domain.maturity_bucket
+_month_from_text = cvm_cda_domain.month_from_text
+_month_label = cvm_cda_domain.month_label
+_norm_key = cvm_cda_domain.normalize_key
+_norm_text = cvm_cda_domain.normalize_text
+_parse_date_text = cvm_cda_domain.parse_date_text
+_previous_months = cvm_cda_domain.previous_months
+_safe_div = cvm_cda_domain.safe_div
+_safe_float = cvm_cda_domain.safe_float
+_source_block = cvm_cda_domain.source_block
 
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 CVM_CDA_SCHEMA_VERSION = 2
@@ -255,100 +271,6 @@ def _quote_ident(name: str) -> str:
     return '"' + str(name).replace('"', '""') + '"'
 
 
-def _month_from_text(value: str) -> str | None:
-    match = re.search(r"(20\d{2})(0[1-9]|1[0-2])", str(value or ""))
-    return "".join(match.groups()) if match else None
-
-
-def _month_label(yyyymm: str | None) -> str:
-    text = str(yyyymm or "")
-    if not re.fullmatch(r"20\d{4}", text):
-        return text or "-"
-    return f"{text[:4]}-{text[4:6]}"
-
-
-def _previous_months(month: str, count: int) -> list[str]:
-    if not re.fullmatch(r"20\d{4}", str(month or "")):
-        return []
-    year = int(month[:4])
-    month_num = int(month[4:6])
-    result = []
-    for _ in range(max(0, count)):
-        result.append(f"{year:04d}{month_num:02d}")
-        month_num -= 1
-        if month_num <= 0:
-            month_num = 12
-            year -= 1
-    return result
-
-
-def _safe_float(value: Any) -> float:
-    text = str(value if value is not None else "").strip().replace(",", "")
-    if not text:
-        return 0.0
-    try:
-        parsed = float(text)
-    except (TypeError, ValueError):
-        return 0.0
-    return parsed if math.isfinite(parsed) else 0.0
-
-
-def _safe_div(numerator: Any, denominator: Any, default: float = 0.0) -> float:
-    den = _safe_float(denominator)
-    if den == 0:
-        return default
-    return _safe_float(numerator) / den
-
-
-def _clamp(value: Any, lower: float, upper: float) -> float:
-    parsed = _safe_float(value)
-    return max(lower, min(parsed, upper))
-
-
-def _parse_date_text(value: Any) -> date | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        return datetime.fromisoformat(text[:10]).date()
-    except Exception:
-        return None
-
-
-def _parse_iso_datetime(value: Any) -> datetime | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    if text.endswith("Z"):
-        text = text[:-1] + "+00:00"
-    try:
-        parsed = datetime.fromisoformat(text)
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed
-    except Exception:
-        return None
-
-
-def _norm_text(value: Any) -> str:
-    text = str(value if value is not None else "").replace("\xa0", " ").strip()
-    return re.sub(r"\s+", " ", text)
-
-
-def _norm_key(value: Any) -> str:
-    text = _norm_text(value).upper()
-    text = re.sub(r"[^A-Z0-9]+", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _first_nonempty(values: Any, default: str = "") -> str:
-    for value in values:
-        text = _norm_text(value)
-        if text:
-            return text
-    return default
-
-
 def _series_first_present(frame: pd.DataFrame, columns: tuple[str, ...] | list[str]) -> pd.Series:
     output = pd.Series([""] * len(frame), index=frame.index, dtype="object")
     for column in columns:
@@ -369,106 +291,13 @@ def _series_num(frame: pd.DataFrame, column: str) -> pd.Series:
 def _series_str(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series([""] * len(frame), index=frame.index, dtype="object")
-    return frame[column].astype(str).replace({"nan": "", "None": ""}).str.replace("\xa0", " ", regex=False).str.strip()
-
-
-def _source_block(file_name: str) -> str:
-    text = str(file_name or "").upper()
-    if "CONFID" in text and "FIE" in text:
-        return "FIE_CONFID"
-    if "CONFID" in text:
-        return "CONFID"
-    match = re.search(r"_BLC_(\d)_", text)
-    if match:
-        return f"BLC_{match.group(1)}"
-    if "CDA_FIE_" in text:
-        return "FIE"
-    return "CDA"
-
-
-def _asset_class_for(block: str, tp_aplic: Any, tp_ativo: Any, asset_desc: Any) -> str:
-    block_text = str(block or "").upper()
-    text = _norm_key(f"{tp_aplic} {tp_ativo} {asset_desc} {block}")
-    use_block_hint = block_text not in {"CONFID", "FIE", "FIE_CONFID"}
-    if (use_block_hint and block_text == "BLC_1") or "TITULO PUBLICO" in text or "SELIC" in text or "COMPROMISSAD" in text:
-        return "Titulos Publicos"
-    if (use_block_hint and block_text == "BLC_2") or "COTAS DE FUNDOS" in text or "FUNDO" in text and "COTA" in text:
-        return "Cotas de Fundos"
-    if (
-        (use_block_hint and block_text == "BLC_3")
-        or "SWAP" in text
-        or "MERCADO FUTURO" in text
-        or "FUTURO" in text
-        or "OPCO" in text
-        or "TERMO" in text
-    ):
-        return "Derivativos"
-    if "ACAO" in text or "ACOES" in text or "BDR" in text or "ETF" in text:
-        return "Acoes"
-    if (
-        (use_block_hint and block_text == "BLC_5")
-        or "DEPOSITO" in text
-        or "CDB" in text
-        or "LETRA FINANCEIRA" in text
-        or "DISPONIBILIDADE" in text
-    ):
-        return "Depositos e IF"
-    if (
-        (use_block_hint and block_text == "BLC_6")
-        or "AGRONEGOCIO" in text
-        or "CRA" in text
-        or "CRI" in text
-        or "DIREITOS CREDITORIOS" in text
-    ):
-        return "Agronegocio/Credito"
-    if (use_block_hint and block_text == "BLC_7") or "EXTERIOR" in text or "OFFSHORE" in text:
-        return "Investimento Exterior"
-    if "DEBENTURE" in text or "NOTA COMERCIAL" in text or "CREDITO PRIVADO" in text or "TITULOS DE CREDITO PRIVADO" in text:
-        return "Credito Privado"
-    return "Outros"
-
-
-def _maturity_bucket(maturity_date: Any, as_of_date: Any) -> str:
-    maturity = str(maturity_date or "").strip()[:10]
-    as_of = str(as_of_date or "").strip()[:10]
-    if not maturity or not as_of:
-        return "sem vencimento"
-    try:
-        years = (datetime.fromisoformat(maturity).date() - datetime.fromisoformat(as_of).date()).days / 365.25
-    except Exception:
-        return "sem vencimento"
-    if years < 0:
-        return "vencido/indefinido"
-    if years <= 1:
-        return "0-1y"
-    if years <= 3:
-        return "1-3y"
-    if years <= 5:
-        return "3-5y"
-    if years <= 7:
-        return "5-7y"
-    if years <= 10:
-        return "7-10y"
-    if years <= 30:
-        return "10-30y"
-    return "30y+"
-
-
-@dataclass(frozen=True)
-class CdaRemoteMonth:
-    month: str
-    url: str
-    name: str = ""
-    last_modified: str | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "month": self.month,
-            "label": _month_label(self.month),
-            "url": self.url,
-            "name": self.name,
-            "last_modified": self.last_modified,
-        }
+    return (
+        frame[column]
+        .astype(str)
+        .replace({"nan": "", "None": ""})
+        .str.replace("\xa0", " ", regex=False)
+        .str.strip()
+    )
 
 
 class CvmCdaService:
@@ -693,20 +522,26 @@ class CvmCdaService:
     def status(self) -> dict[str, Any]:
         self.init_db()
         with self._connect() as con:
-            months = [dict(row) for row in con.execute(
-                "SELECT * FROM cvm_cda_months ORDER BY month DESC LIMIT 18"
-            ).fetchall()]
+            months = [
+                dict(row)
+                for row in con.execute(
+                    "SELECT * FROM cvm_cda_months ORDER BY month DESC LIMIT 18"
+                ).fetchall()
+            ]
             latest = con.execute(
                 "SELECT * FROM cvm_cda_months WHERE status = 'ready' ORDER BY month DESC LIMIT 1"
             ).fetchone()
-            logs = [dict(row) for row in con.execute(
-                """
+            logs = [
+                dict(row)
+                for row in con.execute(
+                    """
                 SELECT month, event_at, level, message, detail_json
                 FROM cvm_cda_ingest_logs
                 ORDER BY id DESC
                 LIMIT 20
                 """
-            ).fetchall()]
+                ).fetchall()
+            ]
         return {
             "ok": bool(latest),
             "success": True,
@@ -764,10 +599,14 @@ class CvmCdaService:
         month = str(month)
         if not re.fullmatch(r"20\d{4}", month):
             raise ValueError("month must look like YYYYMM")
-        resource = resources.get(month) or CdaRemoteMonth(month=month, url=CVM_CDA_PATTERN.format(yyyymm=month))
+        resource = resources.get(month) or CdaRemoteMonth(
+            month=month, url=CVM_CDA_PATTERN.format(yyyymm=month)
+        )
 
         with self._connect() as con:
-            current = con.execute("SELECT * FROM cvm_cda_months WHERE month = ?", (month,)).fetchone()
+            current = con.execute(
+                "SELECT * FROM cvm_cda_months WHERE month = ?", (month,)
+            ).fetchone()
             if (
                 current
                 and current["status"] == "ready"
@@ -784,7 +623,13 @@ class CvmCdaService:
                 }
 
         zip_path = self._download_month(resource, force=force)
-        return self.ingest_zip(zip_path=zip_path, month=month, source_url=resource.url, source_last_modified=resource.last_modified, force=True)
+        return self.ingest_zip(
+            zip_path=zip_path,
+            month=month,
+            source_url=resource.url,
+            source_last_modified=resource.last_modified,
+            force=True,
+        )
 
     def ingest_zip(
         self,
@@ -805,14 +650,22 @@ class CvmCdaService:
             raise ValueError("Could not infer month from CDA zip path.")
 
         with zipfile.ZipFile(path) as archive:
-            members = [info for info in archive.infolist() if info.filename.lower().endswith(".csv")]
+            members = [
+                info for info in archive.infolist() if info.filename.lower().endswith(".csv")
+            ]
             if not members:
                 raise RuntimeError("CVM CDA zip does not contain CSV files.")
 
             with self._connect() as con:
                 if force:
                     self._delete_month(con, month)
-                self._log(con, month, "info", "Starting CVM CDA ingest", {"zip_path": str(path), "files": len(members)})
+                self._log(
+                    con,
+                    month,
+                    "info",
+                    "Starting CVM CDA ingest",
+                    {"zip_path": str(path), "files": len(members)},
+                )
                 con.execute(
                     """
                     INSERT OR REPLACE INTO cvm_cda_months (
@@ -830,7 +683,9 @@ class CvmCdaService:
                         CVM_CDA_SCHEMA_VERSION,
                         len(members),
                         0,
-                        json.dumps({"members": [info.filename for info in members]}, ensure_ascii=False),
+                        json.dumps(
+                            {"members": [info.filename for info in members]}, ensure_ascii=False
+                        ),
                         None,
                     ),
                 )
@@ -913,16 +768,21 @@ class CvmCdaService:
                     },
                 }
             month = resolved
-            month_row = con.execute("SELECT * FROM cvm_cda_months WHERE month = ?", (month,)).fetchone()
-            manifest = [dict(row) for row in con.execute(
-                """
+            month_row = con.execute(
+                "SELECT * FROM cvm_cda_months WHERE month = ?", (month,)
+            ).fetchone()
+            manifest = [
+                dict(row)
+                for row in con.execute(
+                    """
                 SELECT source_file, source_block, row_count, column_count, file_size_bytes, loaded_at
                 FROM cvm_cda_file_manifest
                 WHERE month = ?
                 ORDER BY source_file
                 """,
-                (month,),
-            ).fetchall()]
+                    (month,),
+                ).fetchall()
+            ]
             kpi_row = con.execute(
                 """
                 SELECT
@@ -969,28 +829,34 @@ class CvmCdaService:
                     "related_issuer",
                 )
             }
-            top_funds = [dict(row) for row in con.execute(
-                """
+            top_funds = [
+                dict(row)
+                for row in con.execute(
+                    """
                 SELECT *
                 FROM cvm_cda_fund_summary
                 WHERE month = ?
                 ORDER BY pl DESC
                 LIMIT 25
                 """,
-                (month,),
-            ).fetchall()]
+                    (month,),
+                ).fetchall()
+            ]
             top_issuers = self._summary_rows(con, month, "issuer", 25)
             top_assets = self._summary_rows(con, month, "security", 25)
-            logs = [dict(row) for row in con.execute(
-                """
+            logs = [
+                dict(row)
+                for row in con.execute(
+                    """
                 SELECT event_at, level, message, detail_json
                 FROM cvm_cda_ingest_logs
                 WHERE month = ?
                 ORDER BY id DESC
                 LIMIT 18
                 """,
-                (month,),
-            ).fetchall()]
+                    (month,),
+                ).fetchall()
+            ]
 
             report = {
                 "name": "CVM CDA Brasil",
@@ -999,7 +865,9 @@ class CvmCdaService:
                 "as_of_date": month_row["latest_dt"] if month_row else None,
                 "source": "CVM Composicao e Diversificacao das Aplicacoes",
                 "source_url": CVM_CDA_DATASET_URL,
-                "download_url": month_row["source_url"] if month_row else CVM_CDA_PATTERN.format(yyyymm=month),
+                "download_url": month_row["source_url"]
+                if month_row
+                else CVM_CDA_PATTERN.format(yyyymm=month),
                 "status": month_row["status"] if month_row else "unknown",
                 "last_imported_at": month_row["imported_at"] if month_row else None,
                 "db_path": str(self.db_path),
@@ -1066,7 +934,12 @@ class CvmCdaService:
         with self._connect() as con:
             resolved = self._resolve_month(con, month)
             if not resolved:
-                return {"ok": False, "success": False, "error": "CVM CDA database is empty.", "rows": []}
+                return {
+                    "ok": False,
+                    "success": False,
+                    "error": "CVM CDA database is empty.",
+                    "rows": [],
+                }
             total = con.execute(
                 f"""
                 SELECT COUNT(*) AS total
@@ -1076,8 +949,10 @@ class CvmCdaService:
                 """,
                 (resolved, target),
             ).fetchone()["total"]
-            rows = [dict(row) for row in con.execute(
-                f"""
+            rows = [
+                dict(row)
+                for row in con.execute(
+                    f"""
                 SELECT
                     fund_cnpj, target, target_label, fund_name, fund_type, dt_comptc, pl,
                     long_value, short_value, net_value, gross_value, target_pct_pl,
@@ -1089,8 +964,9 @@ class CvmCdaService:
                 ORDER BY {order_col} DESC
                 LIMIT ? OFFSET ?
                 """,
-                (resolved, target, per_page, offset),
-            ).fetchall()]
+                    (resolved, target, per_page, offset),
+                ).fetchall()
+            ]
             for index, row in enumerate(rows, start=offset + 1):
                 row["rank"] = index
             return {
@@ -1128,7 +1004,12 @@ class CvmCdaService:
         with self._connect() as con:
             resolved = self._resolve_month(con, month)
             if not resolved:
-                return {"ok": False, "success": False, "error": "CVM CDA database is empty.", "rows": []}
+                return {
+                    "ok": False,
+                    "success": False,
+                    "error": "CVM CDA database is empty.",
+                    "rows": [],
+                }
             total = con.execute(
                 f"""
                 SELECT COUNT(*) AS total
@@ -1138,8 +1019,10 @@ class CvmCdaService:
                 """,
                 (resolved, target),
             ).fetchone()["total"]
-            rows = [dict(row) for row in con.execute(
-                f"""
+            rows = [
+                dict(row)
+                for row in con.execute(
+                    f"""
                 SELECT
                     security_key, issuer_name, asset_desc, asset_class, country,
                     long_value, short_value, net_value, gross_value, fund_count, holding_count,
@@ -1150,8 +1033,9 @@ class CvmCdaService:
                 ORDER BY {order_col} DESC
                 LIMIT ? OFFSET ?
                 """,
-                (resolved, target, per_page, offset),
-            ).fetchall()]
+                    (resolved, target, per_page, offset),
+                ).fetchall()
+            ]
             for index, row in enumerate(rows, start=offset + 1):
                 row["rank"] = index
             return {
@@ -1193,7 +1077,12 @@ class CvmCdaService:
         with self._connect() as con:
             resolved = self._resolve_month(con, month)
             if not resolved:
-                return {"ok": False, "success": False, "error": "CVM CDA database is empty.", "rows": []}
+                return {
+                    "ok": False,
+                    "success": False,
+                    "error": "CVM CDA database is empty.",
+                    "rows": [],
+                }
             total = con.execute(
                 f"""
                 SELECT COUNT(*) AS total
@@ -1206,8 +1095,10 @@ class CvmCdaService:
                 "SELECT * FROM cvm_cda_fund_summary WHERE month = ? AND fund_cnpj = ?",
                 (resolved, fund_cnpj),
             ).fetchone()
-            rows = [dict(row) for row in con.execute(
-                f"""
+            rows = [
+                dict(row)
+                for row in con.execute(
+                    f"""
                 SELECT
                     source_block, fund_cnpj, fund_name, dt_comptc, tp_aplic, tp_ativo,
                     asset_class, asset_subclass, asset_code, asset_desc, isin,
@@ -1220,8 +1111,9 @@ class CvmCdaService:
                 ORDER BY ABS(COALESCE(value_market, 0)) DESC
                 LIMIT ? OFFSET ?
                 """,
-                (resolved, fund_cnpj, per_page, offset),
-            ).fetchall()]
+                    (resolved, fund_cnpj, per_page, offset),
+                ).fetchall()
+            ]
             for index, row in enumerate(rows, start=offset + 1):
                 row["rank"] = index
             return {
@@ -1247,8 +1139,10 @@ class CvmCdaService:
             heatmap = self._build_heatmap(con, resolved)
             class_mix = self._summary_rows(con, resolved, "asset_class", 18)
             fund_type_mix = self._summary_rows(con, resolved, "fund_type", 18)
-            concentration = [dict(row) for row in con.execute(
-                """
+            concentration = [
+                dict(row)
+                for row in con.execute(
+                    """
                 SELECT fund_cnpj, fund_name, fund_type, pl, max_position_value, concentration_pct,
                        foreign_pct_pl, private_credit_pct_pl, confidential_pct_pl, turnover_pct_pl
                 FROM cvm_cda_fund_summary
@@ -1256,11 +1150,14 @@ class CvmCdaService:
                 ORDER BY concentration_pct DESC
                 LIMIT 80
                 """,
-                (resolved,),
-            ).fetchall()]
+                    (resolved,),
+                ).fetchall()
+            ]
             issuer_crowding = self._summary_rows(con, resolved, "issuer", 40)
-            edge_funds = [dict(row) for row in con.execute(
-                """
+            edge_funds = [
+                dict(row)
+                for row in con.execute(
+                    """
                 SELECT fund_cnpj, fund_name, fund_type, pl, foreign_pct_pl, private_credit_pct_pl,
                        confidential_pct_pl, concentration_pct,
                        (COALESCE(foreign_pct_pl, 0) * 0.35
@@ -1272,8 +1169,9 @@ class CvmCdaService:
                 ORDER BY edge_score DESC
                 LIMIT 40
                 """,
-                (resolved,),
-            ).fetchall()]
+                    (resolved,),
+                ).fetchall()
+            ]
             return {
                 "ok": True,
                 "success": True,
@@ -1286,12 +1184,11 @@ class CvmCdaService:
                 "edge_funds": edge_funds,
             }
 
-    def get_redemption_radar(self, month: str | None = None, *, force: bool = False) -> dict[str, Any]:
+    def get_redemption_radar(
+        self, month: str | None = None, *, force: bool = False
+    ) -> dict[str, Any]:
         cached = self._read_radar_cache()
-        if (
-            cached
-            and not force
-        ):
+        if cached and not force:
             cached_month = str((cached.get("report") or {}).get("month") or "")
             requested_month = str(month or "").strip().lower()
             use_cached_latest = requested_month in {"", "latest"}
@@ -1303,7 +1200,9 @@ class CvmCdaService:
             resolved = self._resolve_radar_month(con, month)
             if not resolved:
                 return {"ok": False, "success": False, "error": "CVM CDA database is empty."}
-            month_row = con.execute("SELECT * FROM cvm_cda_months WHERE month = ?", (resolved,)).fetchone()
+            month_row = con.execute(
+                "SELECT * FROM cvm_cda_months WHERE month = ?", (resolved,)
+            ).fetchone()
         if (
             cached
             and not force
@@ -1324,7 +1223,9 @@ class CvmCdaService:
             logger.exception("Failed to read CVM CDA radar cache")
             return None
 
-    def _build_redemption_radar_payload(self, month: str, month_row: sqlite3.Row | None) -> dict[str, Any]:
+    def _build_redemption_radar_payload(
+        self, month: str, month_row: sqlite3.Row | None
+    ) -> dict[str, Any]:
         with self._connect() as con:
             fund_summary = pd.read_sql_query(
                 """
@@ -1367,13 +1268,29 @@ class CvmCdaService:
 
         for frame in (fund_summary, holdings):
             frame["fund_cnpj"] = frame["fund_cnpj"].astype(str).str.replace(r"\D", "", regex=True)
-            frame["fund_name"] = frame.get("fund_name", "").astype(str).fillna("").str.strip() if "fund_name" in frame.columns else ""
-            frame["fund_type"] = frame.get("fund_type", "").astype(str).fillna("").str.strip() if "fund_type" in frame.columns else ""
+            frame["fund_name"] = (
+                frame.get("fund_name", "").astype(str).fillna("").str.strip()
+                if "fund_name" in frame.columns
+                else ""
+            )
+            frame["fund_type"] = (
+                frame.get("fund_type", "").astype(str).fillna("").str.strip()
+                if "fund_type" in frame.columns
+                else ""
+            )
 
-        cda_as_of_date = _parse_date_text(month_row["latest_dt"] if month_row else None) or _parse_date_text(fund_summary["dt_comptc"].max())
-        cda_as_of_date = cda_as_of_date or _parse_date_text(f"{month[:4]}-{month[4:6]}-01") or _local_now().date()
+        cda_as_of_date = _parse_date_text(
+            month_row["latest_dt"] if month_row else None
+        ) or _parse_date_text(fund_summary["dt_comptc"].max())
+        cda_as_of_date = (
+            cda_as_of_date
+            or _parse_date_text(f"{month[:4]}-{month[4:6]}-01")
+            or _local_now().date()
+        )
         cda_funds = set(fund_summary["fund_cnpj"].astype(str).tolist())
-        flow_as_of_date, flow_daily = self._load_flow_radar_context(cda_funds, cda_as_of_date=cda_as_of_date)
+        flow_as_of_date, flow_daily = self._load_flow_radar_context(
+            cda_funds, cda_as_of_date=cda_as_of_date
+        )
         if flow_daily.empty:
             return {
                 "ok": False,
@@ -1388,19 +1305,19 @@ class CvmCdaService:
             .tail(1)
         )
         flow_since = flow_daily[
-            (flow_daily["dt"].dt.date > cda_as_of_date) & (flow_daily["dt"].dt.date <= flow_as_of_date)
+            (flow_daily["dt"].dt.date > cda_as_of_date)
+            & (flow_daily["dt"].dt.date <= flow_as_of_date)
         ].copy()
         if flow_since.empty:
             flow_since = flow_daily[flow_daily["dt"].dt.date <= flow_as_of_date].copy()
-        redemption_period_days = max((flow_as_of_date - cda_as_of_date).days, 1) if cda_as_of_date else 1
-        since_agg = (
-            flow_since.groupby("cnpj_fundo", as_index=False)
-            .agg(
-                net_flow_since_cda=("captacao_liquida", "sum"),
-                gross_redemption_since_cda=("resgate", "sum"),
-                gross_subscription_since_cda=("captacao", "sum"),
-                negative_days=("captacao_liquida", lambda series: int((series < 0).sum())),
-            )
+        redemption_period_days = (
+            max((flow_as_of_date - cda_as_of_date).days, 1) if cda_as_of_date else 1
+        )
+        since_agg = flow_since.groupby("cnpj_fundo", as_index=False).agg(
+            net_flow_since_cda=("captacao_liquida", "sum"),
+            gross_redemption_since_cda=("resgate", "sum"),
+            gross_subscription_since_cda=("captacao", "sum"),
+            negative_days=("captacao_liquida", lambda series: int((series < 0).sum())),
         )
         latest_flow = latest_flow.merge(since_agg, on="cnpj_fundo", how="left")
         for column in [
@@ -1435,7 +1352,9 @@ class CvmCdaService:
             "gross_subscription_since_cda",
             "negative_days",
         ]
-        flow_latest = latest_flow[[column for column in flow_cols if column in latest_flow.columns]].copy()
+        flow_latest = latest_flow[
+            [column for column in flow_cols if column in latest_flow.columns]
+        ].copy()
         flow_latest = flow_latest.rename(
             columns={
                 "fund_name": "flow_fund_name",
@@ -1445,30 +1364,45 @@ class CvmCdaService:
                 "captacao": "gross_subscription_1d",
             }
         )
-        fund_summary = fund_summary.merge(flow_latest, left_on="fund_cnpj", right_on="cnpj_fundo", how="left")
+        fund_summary = fund_summary.merge(
+            flow_latest, left_on="fund_cnpj", right_on="cnpj_fundo", how="left"
+        )
         if "cnpj_fundo" in fund_summary.columns:
             fund_summary = fund_summary.drop(columns=["cnpj_fundo"])
-        fund_summary["flow_fund_name"] = fund_summary.get("flow_fund_name", "").fillna("").astype(str)
+        fund_summary["flow_fund_name"] = (
+            fund_summary.get("flow_fund_name", "").fillna("").astype(str)
+        )
         fund_summary["fund_name"] = fund_summary["fund_name"].where(
             fund_summary["fund_name"].astype(str).str.strip() != "",
             fund_summary["flow_fund_name"],
         )
         fund_summary["macro_classe"] = fund_summary.apply(self._infer_macro_class, axis=1)
-        fund_summary["macro_classe"] = fund_summary["macro_classe"].fillna("Unclassified").astype(str).replace({"nan": "Unclassified", "": "Unclassified"})
+        fund_summary["macro_classe"] = (
+            fund_summary["macro_classe"]
+            .fillna("Unclassified")
+            .astype(str)
+            .replace({"nan": "Unclassified", "": "Unclassified"})
+        )
         fund_summary["fund_type_group"] = fund_summary.apply(self._infer_fund_type_group, axis=1)
         fund_summary["cda_pl"] = fund_summary["pl"].apply(_safe_float)
         fund_summary["latest_pl"] = fund_summary.get("latest_pl", 0.0).apply(_safe_float)
         fund_summary["estimated_current_pl"] = fund_summary.apply(
-            lambda row: self._estimate_current_pl(row["cda_pl"], row["latest_pl"], row.get("net_flow_since_cda")),
+            lambda row: self._estimate_current_pl(
+                row["cda_pl"], row["latest_pl"], row.get("net_flow_since_cda")
+            ),
             axis=1,
         )
         fund_summary["scale_ratio"] = fund_summary.apply(
-            lambda row: _clamp(_safe_div(row["estimated_current_pl"], row["cda_pl"], default=1.0), 0.1, 3.0),
+            lambda row: _clamp(
+                _safe_div(row["estimated_current_pl"], row["cda_pl"], default=1.0), 0.1, 3.0
+            ),
             axis=1,
         )
         fund_summary["redemption_period_days"] = redemption_period_days
         fund_summary["daily_gross_redemption_since_cda"] = fund_summary.apply(
-            lambda row: _safe_float(row.get("gross_redemption_since_cda")) / max(redemption_period_days, 1),
+            lambda row: (
+                _safe_float(row.get("gross_redemption_since_cda")) / max(redemption_period_days, 1)
+            ),
             axis=1,
         )
         fund_summary["daily_outflow_base"] = fund_summary.apply(
@@ -1484,7 +1418,9 @@ class CvmCdaService:
             axis=1,
         )
 
-        holdings["asset_class"] = holdings["asset_class"].fillna("").astype(str).str.strip().replace("", "Outros")
+        holdings["asset_class"] = (
+            holdings["asset_class"].fillna("").astype(str).str.strip().replace("", "Outros")
+        )
         holdings = holdings.merge(
             fund_summary[
                 [
@@ -1512,7 +1448,11 @@ class CvmCdaService:
             long_value = max(_safe_float(row.get("long_value")), 0.0)
             short_value = max(_safe_float(row.get("short_value")), 0.0)
             scaled_long = long_value * _clamp(row.get("scale_ratio") or 1.0, 0.1, 3.0)
-            confidential_discount = RADAR_CONFIDENTIAL_SALEABILITY_DISCOUNT if int(row.get("is_confidential") or 0) else 1.0
+            confidential_discount = (
+                RADAR_CONFIDENTIAL_SALEABILITY_DISCOUNT
+                if int(row.get("is_confidential") or 0)
+                else 1.0
+            )
             effective_saleability = _safe_float(meta["saleability_share"]) * confidential_discount
             plausible_saleability = self._plausible_saleability_share(
                 bucket=meta["bucket"],
@@ -1528,7 +1468,10 @@ class CvmCdaService:
                     "fund_cnpj": row.get("fund_cnpj"),
                     "fund_name": row.get("fund_name"),
                     "fund_type": row.get("fund_type"),
-                    "fund_type_group": row.get("fund_type_group") or row.get("fund_type") or row.get("macro_classe") or "Outros",
+                    "fund_type_group": row.get("fund_type_group")
+                    or row.get("fund_type")
+                    or row.get("macro_classe")
+                    or "Outros",
                     "macro_classe": row.get("macro_classe") or "Unclassified",
                     "asset_class": row.get("asset_class") or "Outros",
                     "bucket": meta["bucket"],
@@ -1548,17 +1491,29 @@ class CvmCdaService:
                     "free_inventory_pre": free_pre,
                     "plausible_inventory_pre": plausible_pre,
                     "net_flow_since_cda": _safe_float(row.get("net_flow_since_cda")),
-                    "gross_redemption_since_cda": _safe_float(row.get("gross_redemption_since_cda")),
-                    "redemption_period_days": int(row.get("redemption_period_days") or redemption_period_days),
-                    "daily_gross_redemption_since_cda": _safe_float(row.get("daily_gross_redemption_since_cda")),
+                    "gross_redemption_since_cda": _safe_float(
+                        row.get("gross_redemption_since_cda")
+                    ),
+                    "redemption_period_days": int(
+                        row.get("redemption_period_days") or redemption_period_days
+                    ),
+                    "daily_gross_redemption_since_cda": _safe_float(
+                        row.get("daily_gross_redemption_since_cda")
+                    ),
                 }
             )
         bucket_df = pd.DataFrame(bucket_rows)
         if bucket_df.empty:
-            return {"ok": False, "success": False, "error": "Sem buckets elegiveis para o radar CDA."}
+            return {
+                "ok": False,
+                "success": False,
+                "error": "Sem buckets elegiveis para o radar CDA.",
+            }
 
         allocation_rows: list[dict[str, Any]] = []
-        for fund_cnpj, group in bucket_df.sort_values(["fund_cnpj", "liquidity_rank"]).groupby("fund_cnpj", sort=False):
+        for _fund_cnpj, group in bucket_df.sort_values(["fund_cnpj", "liquidity_rank"]).groupby(
+            "fund_cnpj", sort=False
+        ):
             redemption_pressure = max(
                 0.0,
                 _safe_float(group["gross_redemption_since_cda"].iloc[0]),
@@ -1571,34 +1526,40 @@ class CvmCdaService:
                 free_pre = _safe_float(row.get("free_inventory_pre"))
                 plausible_pre = _safe_float(row.get("plausible_inventory_pre"))
                 consumed = min(free_pre, remaining) if remaining > 0 else 0.0
-                plausible_consumed = min(plausible_pre, plausible_remaining) if plausible_remaining > 0 else 0.0
+                plausible_consumed = (
+                    min(plausible_pre, plausible_remaining) if plausible_remaining > 0 else 0.0
+                )
                 remaining -= consumed
                 plausible_remaining -= plausible_consumed
                 if consumed > 0:
-                    touched_buckets.append(str(row.get("bucket_label") or row.get("asset_class") or ""))
+                    touched_buckets.append(
+                        str(row.get("bucket_label") or row.get("asset_class") or "")
+                    )
                 allocation_rows.append(
                     {
                         **row.to_dict(),
                         "consumed_since_cda": consumed,
                         "free_inventory_remaining": max(0.0, free_pre - consumed),
                         "plausible_consumed_since_cda": plausible_consumed,
-                        "plausible_inventory_remaining": max(0.0, plausible_pre - plausible_consumed),
+                        "plausible_inventory_remaining": max(
+                            0.0, plausible_pre - plausible_consumed
+                        ),
                         "bucket_touched": consumed > 0,
                     }
                 )
         allocation_df = pd.DataFrame(allocation_rows)
-        fund_bucket_agg = (
-            allocation_df.groupby("fund_cnpj", as_index=False)
-            .agg(
-                sellable_inventory_pre=("free_inventory_pre", "sum"),
-                sellable_inventory_remaining=("free_inventory_remaining", "sum"),
-                plausible_inventory_pre=("plausible_inventory_pre", "sum"),
-                plausible_inventory_remaining=("plausible_inventory_remaining", "sum"),
-                quick_inventory_remaining=("free_inventory_remaining", lambda series: float(series.iloc[:0].sum())),
-                consumed_since_cda=("consumed_since_cda", "sum"),
-                plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
-                quick_inventory_pre=("free_inventory_pre", "sum"),
-            )
+        fund_bucket_agg = allocation_df.groupby("fund_cnpj", as_index=False).agg(
+            sellable_inventory_pre=("free_inventory_pre", "sum"),
+            sellable_inventory_remaining=("free_inventory_remaining", "sum"),
+            plausible_inventory_pre=("plausible_inventory_pre", "sum"),
+            plausible_inventory_remaining=("plausible_inventory_remaining", "sum"),
+            quick_inventory_remaining=(
+                "free_inventory_remaining",
+                lambda series: float(series.iloc[:0].sum()),
+            ),
+            consumed_since_cda=("consumed_since_cda", "sum"),
+            plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
+            quick_inventory_pre=("free_inventory_pre", "sum"),
         )
         quick_by_fund = (
             allocation_df[allocation_df["liquidity_rank"] <= 2]
@@ -1608,7 +1569,9 @@ class CvmCdaService:
                 quick_inventory_remaining=("free_inventory_remaining", "sum"),
             )
         )
-        fund_bucket_agg = fund_bucket_agg.drop(columns=["quick_inventory_pre", "quick_inventory_remaining"]).merge(
+        fund_bucket_agg = fund_bucket_agg.drop(
+            columns=["quick_inventory_pre", "quick_inventory_remaining"]
+        ).merge(
             quick_by_fund,
             on="fund_cnpj",
             how="left",
@@ -1620,7 +1583,9 @@ class CvmCdaService:
             .tail(1)[["fund_cnpj", "bucket_label"]]
             .rename(columns={"bucket_label": "bucket_at_risk"})
         )
-        fund_radar = fund_summary.merge(fund_bucket_agg, on="fund_cnpj", how="left").merge(touched_rank, on="fund_cnpj", how="left")
+        fund_radar = fund_summary.merge(fund_bucket_agg, on="fund_cnpj", how="left").merge(
+            touched_rank, on="fund_cnpj", how="left"
+        )
         numeric_fill = [
             "sellable_inventory_pre",
             "sellable_inventory_remaining",
@@ -1637,18 +1602,24 @@ class CvmCdaService:
             fund_radar[column] = fund_radar[column].fillna(0.0)
         fund_radar["bucket_at_risk"] = fund_radar["bucket_at_risk"].fillna("Nao consumiu estoque")
         fund_radar["inventory_burn_pct"] = fund_radar.apply(
-            lambda row: _safe_div(row.get("consumed_since_cda"), row.get("sellable_inventory_pre"), default=0.0),
+            lambda row: _safe_div(
+                row.get("consumed_since_cda"), row.get("sellable_inventory_pre"), default=0.0
+            ),
             axis=1,
         )
         fund_radar["plausible_inventory_burn_pct"] = fund_radar.apply(
-            lambda row: _safe_div(row.get("plausible_consumed_since_cda"), row.get("plausible_inventory_pre"), default=0.0),
+            lambda row: _safe_div(
+                row.get("plausible_consumed_since_cda"),
+                row.get("plausible_inventory_pre"),
+                default=0.0,
+            ),
             axis=1,
         )
         for scenario in RADAR_SCENARIOS:
             scenario_key = scenario["key"]
             scenario_mult = _safe_float(scenario.get("multiplier")) or 1.0
             daily_outflow = fund_radar.apply(
-                lambda row: self._scenario_daily_outflow(
+                lambda row, scenario_key=scenario_key, scenario_mult=scenario_mult: self._scenario_daily_outflow(
                     row,
                     scenario_key=scenario_key,
                     multiplier=scenario_mult,
@@ -1657,69 +1628,95 @@ class CvmCdaService:
             )
             fund_radar[f"daily_outflow_{scenario_key}"] = daily_outflow
             fund_radar[f"runway_days_{scenario_key}"] = fund_radar.apply(
-                lambda row: _safe_div(row.get("sellable_inventory_remaining"), row.get(f"daily_outflow_{scenario_key}"), default=999.0),
+                lambda row, scenario_key=scenario_key: _safe_div(
+                    row.get("sellable_inventory_remaining"),
+                    row.get(f"daily_outflow_{scenario_key}"),
+                    default=999.0,
+                ),
                 axis=1,
             )
             fund_radar[f"plausible_runway_days_{scenario_key}"] = fund_radar.apply(
-                lambda row: _safe_div(row.get("plausible_inventory_remaining"), row.get(f"daily_outflow_{scenario_key}"), default=999.0),
+                lambda row, scenario_key=scenario_key: _safe_div(
+                    row.get("plausible_inventory_remaining"),
+                    row.get(f"daily_outflow_{scenario_key}"),
+                    default=999.0,
+                ),
                 axis=1,
             )
         fund_radar["coverage_flag"] = fund_radar.apply(self._radar_coverage_flag, axis=1)
-        fund_radar["negative_21d"] = fund_radar.get("rolling_flow_21d", 0.0).apply(lambda value: _safe_float(value) < 0)
+        fund_radar["negative_21d"] = fund_radar.get("rolling_flow_21d", 0.0).apply(
+            lambda value: _safe_float(value) < 0
+        )
 
         matched_mask = fund_radar["latest_pl"].fillna(0.0) > 0
         total_cda_pl = float(fund_radar["cda_pl"].fillna(0.0).sum())
         matched_cda_pl = float(fund_radar.loc[matched_mask, "cda_pl"].fillna(0.0).sum())
 
-        class_summary = (
-            fund_radar.groupby("fund_type_group", as_index=False)
-            .agg(
-                fund_count=("fund_cnpj", "nunique"),
-                macro_classe=("macro_classe", lambda series: _first_nonempty(series, default="Unclassified")),
-                cda_pl=("cda_pl", "sum"),
-                current_pl=("estimated_current_pl", "sum"),
-                latest_pl=("latest_pl", "sum"),
-                net_flow_since_cda=("net_flow_since_cda", "sum"),
-                gross_redemption_since_cda=("gross_redemption_since_cda", "sum"),
-                gross_subscription_since_cda=("gross_subscription_since_cda", "sum"),
-                net_flow_21d=("rolling_flow_21d", "sum"),
-                net_flow_5d=("rolling_flow_5d", "sum"),
-                gross_redemption_21d=("rolling_redemption_21d", "sum"),
-                gross_redemption_5d=("rolling_redemption_5d", "sum"),
-                gross_redemption_63d=("rolling_redemption_63d", "sum"),
-                gross_subscription_21d=("rolling_subscription_21d", "sum"),
-                sellable_inventory_pre=("sellable_inventory_pre", "sum"),
-                sellable_inventory_remaining=("sellable_inventory_remaining", "sum"),
-                plausible_inventory_pre=("plausible_inventory_pre", "sum"),
-                plausible_inventory_remaining=("plausible_inventory_remaining", "sum"),
-                consumed_since_cda=("consumed_since_cda", "sum"),
-                plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
-                concentration_pct=("concentration_pct", "mean"),
-                confidential_pct_pl=("confidential_pct_pl", "mean"),
-                daily_outflow_base=("daily_outflow_base", "sum"),
-                daily_outflow_stress=("daily_outflow_stress", "sum"),
-                daily_outflow_extreme=("daily_outflow_extreme", "sum"),
-                daily_gross_redemption_since_cda=("daily_gross_redemption_since_cda", "sum"),
-            )
+        class_summary = fund_radar.groupby("fund_type_group", as_index=False).agg(
+            fund_count=("fund_cnpj", "nunique"),
+            macro_classe=(
+                "macro_classe",
+                lambda series: _first_nonempty(series, default="Unclassified"),
+            ),
+            cda_pl=("cda_pl", "sum"),
+            current_pl=("estimated_current_pl", "sum"),
+            latest_pl=("latest_pl", "sum"),
+            net_flow_since_cda=("net_flow_since_cda", "sum"),
+            gross_redemption_since_cda=("gross_redemption_since_cda", "sum"),
+            gross_subscription_since_cda=("gross_subscription_since_cda", "sum"),
+            net_flow_21d=("rolling_flow_21d", "sum"),
+            net_flow_5d=("rolling_flow_5d", "sum"),
+            gross_redemption_21d=("rolling_redemption_21d", "sum"),
+            gross_redemption_5d=("rolling_redemption_5d", "sum"),
+            gross_redemption_63d=("rolling_redemption_63d", "sum"),
+            gross_subscription_21d=("rolling_subscription_21d", "sum"),
+            sellable_inventory_pre=("sellable_inventory_pre", "sum"),
+            sellable_inventory_remaining=("sellable_inventory_remaining", "sum"),
+            plausible_inventory_pre=("plausible_inventory_pre", "sum"),
+            plausible_inventory_remaining=("plausible_inventory_remaining", "sum"),
+            consumed_since_cda=("consumed_since_cda", "sum"),
+            plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
+            concentration_pct=("concentration_pct", "mean"),
+            confidential_pct_pl=("confidential_pct_pl", "mean"),
+            daily_outflow_base=("daily_outflow_base", "sum"),
+            daily_outflow_stress=("daily_outflow_stress", "sum"),
+            daily_outflow_extreme=("daily_outflow_extreme", "sum"),
+            daily_gross_redemption_since_cda=("daily_gross_redemption_since_cda", "sum"),
         )
-        class_summary["radar_group"] = class_summary["fund_type_group"].fillna("Nao informado").astype(str)
+        class_summary["radar_group"] = (
+            class_summary["fund_type_group"].fillna("Nao informado").astype(str)
+        )
         class_summary["macro_classe"] = class_summary["radar_group"]
         class_summary["inventory_burn_pct"] = class_summary.apply(
-            lambda row: _safe_div(row.get("consumed_since_cda"), row.get("sellable_inventory_pre"), default=0.0),
+            lambda row: _safe_div(
+                row.get("consumed_since_cda"), row.get("sellable_inventory_pre"), default=0.0
+            ),
             axis=1,
         )
         class_summary["plausible_inventory_burn_pct"] = class_summary.apply(
-            lambda row: _safe_div(row.get("plausible_consumed_since_cda"), row.get("plausible_inventory_pre"), default=0.0),
+            lambda row: _safe_div(
+                row.get("plausible_consumed_since_cda"),
+                row.get("plausible_inventory_pre"),
+                default=0.0,
+            ),
             axis=1,
         )
         for scenario in RADAR_SCENARIOS:
             key = scenario["key"]
             class_summary[f"runway_days_{key}"] = class_summary.apply(
-                lambda row: _safe_div(row.get("sellable_inventory_remaining"), row.get(f"daily_outflow_{key}"), default=999.0),
+                lambda row, key=key: _safe_div(
+                    row.get("sellable_inventory_remaining"),
+                    row.get(f"daily_outflow_{key}"),
+                    default=999.0,
+                ),
                 axis=1,
             )
             class_summary[f"plausible_runway_days_{key}"] = class_summary.apply(
-                lambda row: _safe_div(row.get("plausible_inventory_remaining"), row.get(f"daily_outflow_{key}"), default=999.0),
+                lambda row, key=key: _safe_div(
+                    row.get("plausible_inventory_remaining"),
+                    row.get(f"daily_outflow_{key}"),
+                    default=999.0,
+                ),
                 axis=1,
             )
         class_summary = class_summary.sort_values(
@@ -1727,51 +1724,63 @@ class CvmCdaService:
             ascending=[True, True, False],
         ).reset_index(drop=True)
 
-        bucket_summary = (
-            allocation_df.groupby(["bucket", "bucket_label", "liquidity_rank"], as_index=False)
-            .agg(
-                fund_count=("fund_cnpj", "nunique"),
-                cda_long_value=("cda_long_value", "sum"),
-                estimated_long_value=("estimated_long_value", "sum"),
-                free_inventory_pre=("free_inventory_pre", "sum"),
-                free_inventory_remaining=("free_inventory_remaining", "sum"),
-                plausible_inventory_pre=("plausible_inventory_pre", "sum"),
-                plausible_inventory_remaining=("plausible_inventory_remaining", "sum"),
-                consumed_since_cda=("consumed_since_cda", "sum"),
-                plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
-                sell_value=("sell_value", "sum"),
-                buy_value=("buy_value", "sum"),
-            )
+        bucket_summary = allocation_df.groupby(
+            ["bucket", "bucket_label", "liquidity_rank"], as_index=False
+        ).agg(
+            fund_count=("fund_cnpj", "nunique"),
+            cda_long_value=("cda_long_value", "sum"),
+            estimated_long_value=("estimated_long_value", "sum"),
+            free_inventory_pre=("free_inventory_pre", "sum"),
+            free_inventory_remaining=("free_inventory_remaining", "sum"),
+            plausible_inventory_pre=("plausible_inventory_pre", "sum"),
+            plausible_inventory_remaining=("plausible_inventory_remaining", "sum"),
+            consumed_since_cda=("consumed_since_cda", "sum"),
+            plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
+            sell_value=("sell_value", "sum"),
+            buy_value=("buy_value", "sum"),
         )
         bucket_summary["inventory_burn_pct"] = bucket_summary.apply(
-            lambda row: _safe_div(row.get("consumed_since_cda"), row.get("free_inventory_pre"), default=0.0),
+            lambda row: _safe_div(
+                row.get("consumed_since_cda"), row.get("free_inventory_pre"), default=0.0
+            ),
             axis=1,
         )
         bucket_summary["plausible_inventory_burn_pct"] = bucket_summary.apply(
-            lambda row: _safe_div(row.get("plausible_consumed_since_cda"), row.get("plausible_inventory_pre"), default=0.0),
+            lambda row: _safe_div(
+                row.get("plausible_consumed_since_cda"),
+                row.get("plausible_inventory_pre"),
+                default=0.0,
+            ),
             axis=1,
         )
-        bucket_summary = bucket_summary.sort_values(["liquidity_rank", "free_inventory_remaining"], ascending=[True, False]).reset_index(drop=True)
+        bucket_summary = bucket_summary.sort_values(
+            ["liquidity_rank", "free_inventory_remaining"], ascending=[True, False]
+        ).reset_index(drop=True)
 
         heatmap_x = [row["bucket_label"] for row in bucket_summary.to_dict("records")]
         heatmap_y = class_summary["radar_group"].astype(str).tolist()
-        heatmap_group = (
-            allocation_df.groupby(["fund_type_group", "bucket", "bucket_label"], as_index=False)
-            .agg(
-                remaining_inventory=("free_inventory_remaining", "sum"),
-                plausible_remaining_inventory=("plausible_inventory_remaining", "sum"),
-                consumed_since_cda=("consumed_since_cda", "sum"),
-                plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
-                free_inventory_pre=("free_inventory_pre", "sum"),
-                plausible_inventory_pre=("plausible_inventory_pre", "sum"),
-                current_value=("estimated_long_value", "sum"),
-                fund_count=("fund_cnpj", "nunique"),
-            )
+        heatmap_group = allocation_df.groupby(
+            ["fund_type_group", "bucket", "bucket_label"], as_index=False
+        ).agg(
+            remaining_inventory=("free_inventory_remaining", "sum"),
+            plausible_remaining_inventory=("plausible_inventory_remaining", "sum"),
+            consumed_since_cda=("consumed_since_cda", "sum"),
+            plausible_consumed_since_cda=("plausible_consumed_since_cda", "sum"),
+            free_inventory_pre=("free_inventory_pre", "sum"),
+            plausible_inventory_pre=("plausible_inventory_pre", "sum"),
+            current_value=("estimated_long_value", "sum"),
+            fund_count=("fund_cnpj", "nunique"),
         )
         heatmap_cells = []
         for row in heatmap_group.to_dict("records"):
-            burn_pct = _safe_div(row.get("consumed_since_cda"), row.get("free_inventory_pre"), default=0.0)
-            plausible_burn_pct = _safe_div(row.get("plausible_consumed_since_cda"), row.get("plausible_inventory_pre"), default=0.0)
+            burn_pct = _safe_div(
+                row.get("consumed_since_cda"), row.get("free_inventory_pre"), default=0.0
+            )
+            plausible_burn_pct = _safe_div(
+                row.get("plausible_consumed_since_cda"),
+                row.get("plausible_inventory_pre"),
+                default=0.0,
+            )
             radar_group = str(row.get("fund_type_group") or "Nao informado")
             heatmap_cells.append(
                 {
@@ -1781,14 +1790,21 @@ class CvmCdaService:
                     "bucket": row.get("bucket"),
                     "bucket_label": row.get("bucket_label"),
                     "remaining_inventory": _safe_float(row.get("remaining_inventory")),
-                    "plausible_remaining_inventory": _safe_float(row.get("plausible_remaining_inventory")),
+                    "plausible_remaining_inventory": _safe_float(
+                        row.get("plausible_remaining_inventory")
+                    ),
                     "consumed_since_cda": _safe_float(row.get("consumed_since_cda")),
-                    "plausible_consumed_since_cda": _safe_float(row.get("plausible_consumed_since_cda")),
+                    "plausible_consumed_since_cda": _safe_float(
+                        row.get("plausible_consumed_since_cda")
+                    ),
                     "burn_pct": burn_pct,
                     "plausible_burn_pct": plausible_burn_pct,
                     "fund_count": int(row.get("fund_count") or 0),
                     "current_value": _safe_float(row.get("current_value")),
-                    "score": burn_pct - _safe_div(row.get("remaining_inventory"), row.get("current_value"), default=0.0),
+                    "score": burn_pct
+                    - _safe_div(
+                        row.get("remaining_inventory"), row.get("current_value"), default=0.0
+                    ),
                 }
             )
 
@@ -1813,9 +1829,13 @@ class CvmCdaService:
                     "runway_days": runway_days,
                     "plausible_runway_days": plausible_runway_days,
                     "funds_under_5d": int((fund_radar[f"runway_days_{key}"] <= 5).sum()),
-                    "plausible_funds_under_5d": int((fund_radar[f"plausible_runway_days_{key}"] <= 5).sum()),
+                    "plausible_funds_under_5d": int(
+                        (fund_radar[f"plausible_runway_days_{key}"] <= 5).sum()
+                    ),
                     "funds_under_10d": int((fund_radar[f"runway_days_{key}"] <= 10).sum()),
-                    "plausible_funds_under_10d": int((fund_radar[f"plausible_runway_days_{key}"] <= 10).sum()),
+                    "plausible_funds_under_10d": int(
+                        (fund_radar[f"plausible_runway_days_{key}"] <= 10).sum()
+                    ),
                 }
             )
 
@@ -1831,18 +1851,38 @@ class CvmCdaService:
             "total_current_pl": float(fund_radar["estimated_current_pl"].fillna(0.0).sum()),
             "total_latest_pl": float(fund_radar["latest_pl"].fillna(0.0).sum()),
             "total_net_flow_since_cda": float(fund_radar["net_flow_since_cda"].fillna(0.0).sum()),
-            "total_gross_redemption_since_cda": float(fund_radar["gross_redemption_since_cda"].fillna(0.0).sum()),
-            "total_gross_redemption_5d": float(fund_radar.get("rolling_redemption_5d", pd.Series(dtype=float)).fillna(0.0).sum()),
-            "total_gross_redemption_21d": float(fund_radar.get("rolling_redemption_21d", pd.Series(dtype=float)).fillna(0.0).sum()),
-            "total_gross_redemption_63d": float(fund_radar.get("rolling_redemption_63d", pd.Series(dtype=float)).fillna(0.0).sum()),
-            "total_gross_subscription_21d": float(fund_radar.get("rolling_subscription_21d", pd.Series(dtype=float)).fillna(0.0).sum()),
+            "total_gross_redemption_since_cda": float(
+                fund_radar["gross_redemption_since_cda"].fillna(0.0).sum()
+            ),
+            "total_gross_redemption_5d": float(
+                fund_radar.get("rolling_redemption_5d", pd.Series(dtype=float)).fillna(0.0).sum()
+            ),
+            "total_gross_redemption_21d": float(
+                fund_radar.get("rolling_redemption_21d", pd.Series(dtype=float)).fillna(0.0).sum()
+            ),
+            "total_gross_redemption_63d": float(
+                fund_radar.get("rolling_redemption_63d", pd.Series(dtype=float)).fillna(0.0).sum()
+            ),
+            "total_gross_subscription_21d": float(
+                fund_radar.get("rolling_subscription_21d", pd.Series(dtype=float)).fillna(0.0).sum()
+            ),
             "redemption_period_days": redemption_period_days,
-            "daily_gross_redemption_since_cda": float(fund_radar["daily_gross_redemption_since_cda"].fillna(0.0).sum()),
+            "daily_gross_redemption_since_cda": float(
+                fund_radar["daily_gross_redemption_since_cda"].fillna(0.0).sum()
+            ),
             "sellable_inventory_pre": float(fund_radar["sellable_inventory_pre"].fillna(0.0).sum()),
-            "sellable_inventory_remaining": float(fund_radar["sellable_inventory_remaining"].fillna(0.0).sum()),
-            "plausible_inventory_pre": float(fund_radar["plausible_inventory_pre"].fillna(0.0).sum()),
-            "plausible_inventory_remaining": float(fund_radar["plausible_inventory_remaining"].fillna(0.0).sum()),
-            "quick_inventory_remaining": float(fund_radar["quick_inventory_remaining"].fillna(0.0).sum()),
+            "sellable_inventory_remaining": float(
+                fund_radar["sellable_inventory_remaining"].fillna(0.0).sum()
+            ),
+            "plausible_inventory_pre": float(
+                fund_radar["plausible_inventory_pre"].fillna(0.0).sum()
+            ),
+            "plausible_inventory_remaining": float(
+                fund_radar["plausible_inventory_remaining"].fillna(0.0).sum()
+            ),
+            "quick_inventory_remaining": float(
+                fund_radar["quick_inventory_remaining"].fillna(0.0).sum()
+            ),
             "inventory_burn_pct": _safe_div(
                 fund_radar["consumed_since_cda"].fillna(0.0).sum(),
                 fund_radar["sellable_inventory_pre"].fillna(0.0).sum(),
@@ -1856,7 +1896,9 @@ class CvmCdaService:
             "top_pressure_class": top_pressure_class,
             "funds_with_negative_21d": int(fund_radar["negative_21d"].sum()),
             "funds_at_risk_stress_5d": int((fund_radar["runway_days_stress"] <= 5).sum()),
-            "plausible_funds_at_risk_stress_5d": int((fund_radar["plausible_runway_days_stress"] <= 5).sum()),
+            "plausible_funds_at_risk_stress_5d": int(
+                (fund_radar["plausible_runway_days_stress"] <= 5).sum()
+            ),
             "plausible_horizon_days": RADAR_PLAUSIBLE_HORIZON_DAYS,
         }
 
@@ -1868,7 +1910,12 @@ class CvmCdaService:
             | (fund_rows["net_flow_since_cda"].fillna(0.0) < 0)
         ]
         fund_rows = fund_rows.sort_values(
-            ["plausible_runway_days_stress", "runway_days_stress", "inventory_burn_pct", "sellable_inventory_remaining"],
+            [
+                "plausible_runway_days_stress",
+                "runway_days_stress",
+                "inventory_burn_pct",
+                "sellable_inventory_remaining",
+            ],
             ascending=[True, True, False, True],
         ).head(120)
 
@@ -1881,7 +1928,9 @@ class CvmCdaService:
             "matched_cda_pl_pct": _safe_div(matched_cda_pl, total_cda_pl, default=0.0),
             "flow_as_of_date": flow_as_of_date.isoformat(),
             "cda_as_of_date": cda_as_of_date.isoformat() if cda_as_of_date else None,
-            "days_since_cda": max((flow_as_of_date - cda_as_of_date).days, 0) if cda_as_of_date else None,
+            "days_since_cda": max((flow_as_of_date - cda_as_of_date).days, 0)
+            if cda_as_of_date
+            else None,
         }
 
         return {
@@ -1896,7 +1945,9 @@ class CvmCdaService:
                 "flow_as_of_date": flow_as_of_date.isoformat(),
                 "source": "CVM CDA + CVM Informe Diario + Cadastro CVM",
                 "source_url": CVM_CDA_DATASET_URL,
-                "download_url": month_row["source_url"] if month_row else CVM_CDA_PATTERN.format(yyyymm=month),
+                "download_url": month_row["source_url"]
+                if month_row
+                else CVM_CDA_PATTERN.format(yyyymm=month),
                 "db_path": str(self.db_path),
                 "methodology": [
                     "Estoque parte do CDA mensal e eh reescalado pelo PL mais recente do Informe Diario.",
@@ -1911,13 +1962,31 @@ class CvmCdaService:
             "scenarios": scenario_rows,
             "class_summary": [
                 {
-                    **{key: (_safe_float(value, ) if isinstance(value, (int, float)) else value) for key, value in row.items()}
+                    **{
+                        key: (
+                            _safe_float(
+                                value,
+                            )
+                            if isinstance(value, (int, float))
+                            else value
+                        )
+                        for key, value in row.items()
+                    }
                 }
                 for row in class_summary.to_dict("records")
             ],
             "bucket_summary": [
                 {
-                    **{key: (_safe_float(value, ) if isinstance(value, (int, float)) else value) for key, value in row.items()}
+                    **{
+                        key: (
+                            _safe_float(
+                                value,
+                            )
+                            if isinstance(value, (int, float))
+                            else value
+                        )
+                        for key, value in row.items()
+                    }
                 }
                 for row in bucket_summary.to_dict("records")
             ],
@@ -1950,26 +2019,44 @@ class CvmCdaService:
                     "gross_redemption_21d": _safe_float(row.get("rolling_redemption_21d")),
                     "gross_redemption_63d": _safe_float(row.get("rolling_redemption_63d")),
                     "gross_subscription_21d": _safe_float(row.get("rolling_subscription_21d")),
-                    "redemption_period_days": int(row.get("redemption_period_days") or redemption_period_days),
-                    "daily_gross_redemption_since_cda": _safe_float(row.get("daily_gross_redemption_since_cda")),
+                    "redemption_period_days": int(
+                        row.get("redemption_period_days") or redemption_period_days
+                    ),
+                    "daily_gross_redemption_since_cda": _safe_float(
+                        row.get("daily_gross_redemption_since_cda")
+                    ),
                     "net_flow_since_cda": _safe_float(row.get("net_flow_since_cda")),
-                    "gross_redemption_since_cda": _safe_float(row.get("gross_redemption_since_cda")),
+                    "gross_redemption_since_cda": _safe_float(
+                        row.get("gross_redemption_since_cda")
+                    ),
                     "sellable_inventory_pre": _safe_float(row.get("sellable_inventory_pre")),
-                    "sellable_inventory_remaining": _safe_float(row.get("sellable_inventory_remaining")),
+                    "sellable_inventory_remaining": _safe_float(
+                        row.get("sellable_inventory_remaining")
+                    ),
                     "plausible_inventory_pre": _safe_float(row.get("plausible_inventory_pre")),
-                    "plausible_inventory_remaining": _safe_float(row.get("plausible_inventory_remaining")),
+                    "plausible_inventory_remaining": _safe_float(
+                        row.get("plausible_inventory_remaining")
+                    ),
                     "quick_inventory_remaining": _safe_float(row.get("quick_inventory_remaining")),
                     "inventory_burn_pct": _safe_float(row.get("inventory_burn_pct")),
-                    "plausible_inventory_burn_pct": _safe_float(row.get("plausible_inventory_burn_pct")),
+                    "plausible_inventory_burn_pct": _safe_float(
+                        row.get("plausible_inventory_burn_pct")
+                    ),
                     "daily_outflow_base": _safe_float(row.get("daily_outflow_base")),
                     "daily_outflow_stress": _safe_float(row.get("daily_outflow_stress")),
                     "daily_outflow_extreme": _safe_float(row.get("daily_outflow_extreme")),
                     "runway_days_base": _safe_float(row.get("runway_days_base")),
                     "runway_days_stress": _safe_float(row.get("runway_days_stress")),
                     "runway_days_extreme": _safe_float(row.get("runway_days_extreme")),
-                    "plausible_runway_days_base": _safe_float(row.get("plausible_runway_days_base")),
-                    "plausible_runway_days_stress": _safe_float(row.get("plausible_runway_days_stress")),
-                    "plausible_runway_days_extreme": _safe_float(row.get("plausible_runway_days_extreme")),
+                    "plausible_runway_days_base": _safe_float(
+                        row.get("plausible_runway_days_base")
+                    ),
+                    "plausible_runway_days_stress": _safe_float(
+                        row.get("plausible_runway_days_stress")
+                    ),
+                    "plausible_runway_days_extreme": _safe_float(
+                        row.get("plausible_runway_days_extreme")
+                    ),
                     "concentration_pct": _safe_float(row.get("concentration_pct")),
                     "confidential_pct_pl": _safe_float(row.get("confidential_pct_pl")),
                     "turnover_pct_pl": _safe_float(row.get("turnover_pct_pl")),
@@ -1981,7 +2068,9 @@ class CvmCdaService:
             ],
         }
 
-    def _load_flow_radar_context(self, cda_funds: set[str], cda_as_of_date: date | None = None) -> tuple[date, pd.DataFrame]:
+    def _load_flow_radar_context(
+        self, cda_funds: set[str], cda_as_of_date: date | None = None
+    ) -> tuple[date, pd.DataFrame]:
         from .funds_flow_local_service import FundsFlowLocalService
 
         flow_service = FundsFlowLocalService()
@@ -1994,23 +2083,33 @@ class CvmCdaService:
         )
         rolling_anchor = requested_end - timedelta(days=95)
         start_date = min(cda_as_of_date, rolling_anchor) if cda_as_of_date else rolling_anchor
-        informe_df, _ = flow_service._load_informe_diario(start_date=start_date, end_date=requested_end, force=False)
+        informe_df, _ = flow_service.cvm_source.load_informe_diario(
+            start_date=start_date,
+            end_date=requested_end,
+            force=False,
+        )
         if informe_df.empty:
             return requested_end, pd.DataFrame()
-        informe_df["cnpj_fundo"] = informe_df["cnpj_fundo"].astype(str).str.replace(r"\D", "", regex=True)
+        informe_df["cnpj_fundo"] = (
+            informe_df["cnpj_fundo"].astype(str).str.replace(r"\D", "", regex=True)
+        )
         flow_as_of_date = flow_service._select_complete_as_of_date(informe_df, requested_end)
         if cda_funds:
             informe_df = informe_df[informe_df["cnpj_fundo"].isin(cda_funds)].copy()
         if informe_df.empty:
             return requested_end, pd.DataFrame()
-        master_df, _ = flow_service._load_cadastro(force=False)
+        master_df, _ = flow_service.cvm_source.load_fund_registry(force=False)
         if not master_df.empty:
-            master_df["cnpj_fundo"] = master_df["cnpj_fundo"].astype(str).str.replace(r"\D", "", regex=True)
+            master_df["cnpj_fundo"] = (
+                master_df["cnpj_fundo"].astype(str).str.replace(r"\D", "", regex=True)
+            )
             if cda_funds:
                 master_df = master_df[master_df["cnpj_fundo"].isin(cda_funds)].copy()
         return flow_as_of_date, self._aggregate_informe_radar_daily(informe_df, master_df)
 
-    def _aggregate_informe_radar_daily(self, informe_df: pd.DataFrame, master_df: pd.DataFrame) -> pd.DataFrame:
+    def _aggregate_informe_radar_daily(
+        self, informe_df: pd.DataFrame, master_df: pd.DataFrame
+    ) -> pd.DataFrame:
         if informe_df.empty:
             return pd.DataFrame()
         df = informe_df.copy()
@@ -2026,22 +2125,33 @@ class CvmCdaService:
             if column not in df.columns:
                 df[column] = 0.0
             df[column] = pd.to_numeric(df[column], errors="coerce").fillna(0.0)
-        if float(df["captacao_liquida"].abs().sum() or 0.0) == 0.0 and float((df["captacao"].abs() + df["resgate"].abs()).sum() or 0.0) > 0.0:
+        if (
+            float(df["captacao_liquida"].abs().sum() or 0.0) == 0.0
+            and float((df["captacao"].abs() + df["resgate"].abs()).sum() or 0.0) > 0.0
+        ):
             df["captacao_liquida"] = df["captacao"] - df["resgate"]
-        daily = (
-            df.groupby(["dt", "cnpj_fundo"], as_index=False)
-            .agg(
-                pl=("pl", "sum"),
-                captacao=("captacao", "sum"),
-                resgate=("resgate", "sum"),
-                captacao_liquida=("captacao_liquida", "sum"),
-                cotistas=("cotistas", "sum"),
-            )
+        daily = df.groupby(["dt", "cnpj_fundo"], as_index=False).agg(
+            pl=("pl", "sum"),
+            captacao=("captacao", "sum"),
+            resgate=("resgate", "sum"),
+            captacao_liquida=("captacao_liquida", "sum"),
+            cotistas=("cotistas", "sum"),
         )
         if not master_df.empty:
             identity = master_df.copy()
-            identity["cnpj_fundo"] = identity["cnpj_fundo"].astype(str).str.replace(r"\D", "", regex=True)
-            keep = [column for column in ("cnpj_fundo", "nome_fundo", "macro_classe", "classification_confidence") if column in identity.columns]
+            identity["cnpj_fundo"] = (
+                identity["cnpj_fundo"].astype(str).str.replace(r"\D", "", regex=True)
+            )
+            keep = [
+                column
+                for column in (
+                    "cnpj_fundo",
+                    "nome_fundo",
+                    "macro_classe",
+                    "classification_confidence",
+                )
+                if column in identity.columns
+            ]
             identity = identity[keep].drop_duplicates("cnpj_fundo")
             daily = daily.merge(identity, on="cnpj_fundo", how="left")
         if "nome_fundo" not in daily.columns:
@@ -2058,7 +2168,9 @@ class CvmCdaService:
         )
         daily["fund_name"] = daily["nome_fundo"].fillna("").astype(str)
         daily["macro_classe"] = daily["macro_classe"].fillna("Unclassified").astype(str)
-        daily["classification_confidence"] = pd.to_numeric(daily["classification_confidence"], errors="coerce").fillna(0.0)
+        daily["classification_confidence"] = pd.to_numeric(
+            daily["classification_confidence"], errors="coerce"
+        ).fillna(0.0)
         return self._aggregate_flow_fund_daily(daily)
 
     def _aggregate_flow_fund_daily(self, series_df: pd.DataFrame) -> pd.DataFrame:
@@ -2070,41 +2182,49 @@ class CvmCdaService:
             .groupby(["dt", "cnpj_fundo"], as_index=False)
             .agg(
                 fund_name=("nome_fundo", lambda series: _first_nonempty(series, default="")),
-                macro_classe=("macro_classe", lambda series: _first_nonempty(
-                    [value for value in series.tolist() if _norm_key(value) not in {"", "UNCLASSIFIED"}],
-                    default="Unclassified",
-                )),
+                macro_classe=(
+                    "macro_classe",
+                    lambda series: _first_nonempty(
+                        [
+                            value
+                            for value in series.tolist()
+                            if _norm_key(value) not in {"", "UNCLASSIFIED"}
+                        ],
+                        default="Unclassified",
+                    ),
+                ),
                 classification_confidence=("classification_confidence", "max"),
             )
         )
-        totals = (
-            df.groupby(["dt", "cnpj_fundo"], as_index=False)
-            .agg(
-                pl=("pl", "sum"),
-                captacao=("captacao", "sum"),
-                resgate=("resgate", "sum"),
-                captacao_liquida=("captacao_liquida", "sum"),
-                cotistas=("cotistas", "sum"),
-                delta_cotistas=("delta_cotistas", "sum"),
-            )
+        totals = df.groupby(["dt", "cnpj_fundo"], as_index=False).agg(
+            pl=("pl", "sum"),
+            captacao=("captacao", "sum"),
+            resgate=("resgate", "sum"),
+            captacao_liquida=("captacao_liquida", "sum"),
+            cotistas=("cotistas", "sum"),
+            delta_cotistas=("delta_cotistas", "sum"),
         )
         daily = totals.merge(identity, on=["dt", "cnpj_fundo"], how="left")
         daily = daily.sort_values(["cnpj_fundo", "dt"]).reset_index(drop=True)
         grouped = daily.groupby("cnpj_fundo", sort=False)
         for window in (5, 21, 63):
             daily[f"rolling_flow_{window}d"] = grouped["captacao_liquida"].transform(
-                lambda series: series.rolling(window, min_periods=1).sum()
+                lambda series, window=window: series.rolling(window, min_periods=1).sum()
             )
             daily[f"rolling_redemption_{window}d"] = grouped["resgate"].transform(
-                lambda series: series.rolling(window, min_periods=1).sum()
+                lambda series, window=window: series.rolling(window, min_periods=1).sum()
             )
             daily[f"rolling_subscription_{window}d"] = grouped["captacao"].transform(
-                lambda series: series.rolling(window, min_periods=1).sum()
+                lambda series, window=window: series.rolling(window, min_periods=1).sum()
             )
             base_pl = grouped["pl"].shift(window)
             daily[f"rolling_flow_pct_pl_{window}d"] = base_pl.where(base_pl > 0)
             daily[f"rolling_flow_pct_pl_{window}d"] = daily.apply(
-                lambda row: _safe_div(row.get(f"rolling_flow_{window}d"), row.get(f"rolling_flow_pct_pl_{window}d"), default=0.0),
+                lambda row, window=window: _safe_div(
+                    row.get(f"rolling_flow_{window}d"),
+                    row.get(f"rolling_flow_pct_pl_{window}d"),
+                    default=0.0,
+                ),
                 axis=1,
             )
         return daily
@@ -2123,7 +2243,9 @@ class CvmCdaService:
 
     def _defensive_floor_pct(self, macro_classe: Any) -> float:
         macro_key = _norm_key(macro_classe)
-        return _safe_float(RADAR_DEFENSIVE_FLOOR.get(macro_key, RADAR_DEFENSIVE_FLOOR["UNCLASSIFIED"]))
+        return _safe_float(
+            RADAR_DEFENSIVE_FLOOR.get(macro_key, RADAR_DEFENSIVE_FLOOR["UNCLASSIFIED"])
+        )
 
     def _plausible_saleability_share(
         self,
@@ -2168,7 +2290,11 @@ class CvmCdaService:
             return "Cambial"
         if public_share + private_share >= 0.55 and equity_share < 0.2 and foreign_share < 0.25:
             return "Renda Fixa"
-        if derivative_share >= 0.12 or foreign_share >= 0.15 or (equity_share >= 0.15 and public_share >= 0.15):
+        if (
+            derivative_share >= 0.12
+            or foreign_share >= 0.15
+            or (equity_share >= 0.15 and public_share >= 0.15)
+        ):
             return "Multimercado"
         if fund_quota_share >= 0.45:
             return "Outros"
@@ -2205,8 +2331,14 @@ class CvmCdaService:
             return macro
         return "Nao informado"
 
-    def _scenario_daily_outflow(self, row: pd.Series, *, scenario_key: str, multiplier: float) -> float:
-        base = max(0.0, _safe_float(row.get("daily_gross_redemption_since_cda")), _safe_float(row.get("daily_outflow_base")))
+    def _scenario_daily_outflow(
+        self, row: pd.Series, *, scenario_key: str, multiplier: float
+    ) -> float:
+        base = max(
+            0.0,
+            _safe_float(row.get("daily_gross_redemption_since_cda")),
+            _safe_float(row.get("daily_outflow_base")),
+        )
         if scenario_key == "base":
             return base * multiplier
         if scenario_key == "extreme":
@@ -2291,7 +2423,9 @@ class CvmCdaService:
         ):
             con.execute(f"DELETE FROM {table} WHERE month = ?", (month,))
 
-    def _ingest_pl_member(self, con: sqlite3.Connection, archive: zipfile.ZipFile, info: zipfile.ZipInfo, month: str) -> int:
+    def _ingest_pl_member(
+        self, con: sqlite3.Connection, archive: zipfile.ZipFile, info: zipfile.ZipInfo, month: str
+    ) -> int:
         row_count = 0
         columns: list[str] = []
         with archive.open(info) as handle:
@@ -2326,12 +2460,25 @@ class CvmCdaService:
                 month, source_file, source_block, row_count, column_count, file_size_bytes, loaded_at, columns_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (month, info.filename, "PL", row_count, len(columns), info.file_size, _utc_now(), json.dumps(columns, ensure_ascii=False)),
+            (
+                month,
+                info.filename,
+                "PL",
+                row_count,
+                len(columns),
+                info.file_size,
+                _utc_now(),
+                json.dumps(columns, ensure_ascii=False),
+            ),
         )
-        self._log(con, month, "info", "Loaded CDA PL file", {"file": info.filename, "rows": row_count})
+        self._log(
+            con, month, "info", "Loaded CDA PL file", {"file": info.filename, "rows": row_count}
+        )
         return row_count
 
-    def _ingest_holding_member(self, con: sqlite3.Connection, archive: zipfile.ZipFile, info: zipfile.ZipInfo, month: str) -> int:
+    def _ingest_holding_member(
+        self, con: sqlite3.Connection, archive: zipfile.ZipFile, info: zipfile.ZipInfo, month: str
+    ) -> int:
         row_count = 0
         columns: list[str] = []
         block = _source_block(info.filename)
@@ -2348,7 +2495,9 @@ class CvmCdaService:
             ):
                 if not columns:
                     columns = list(chunk.columns)
-                output = self._normalize_holding_chunk(chunk, month=month, source_file=info.filename, block=block)
+                output = self._normalize_holding_chunk(
+                    chunk, month=month, source_file=info.filename, block=block
+                )
                 output = output[output["fund_cnpj"].astype(str).str.strip() != ""]
                 if not output.empty:
                     output.to_sql("cvm_cda_holdings", con, if_exists="append", index=False)
@@ -2359,18 +2508,37 @@ class CvmCdaService:
                 month, source_file, source_block, row_count, column_count, file_size_bytes, loaded_at, columns_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (month, info.filename, block, row_count, len(columns), info.file_size, _utc_now(), json.dumps(columns, ensure_ascii=False)),
+            (
+                month,
+                info.filename,
+                block,
+                row_count,
+                len(columns),
+                info.file_size,
+                _utc_now(),
+                json.dumps(columns, ensure_ascii=False),
+            ),
         )
-        self._log(con, month, "info", "Loaded CDA holdings file", {"file": info.filename, "block": block, "rows": row_count})
+        self._log(
+            con,
+            month,
+            "info",
+            "Loaded CDA holdings file",
+            {"file": info.filename, "block": block, "rows": row_count},
+        )
         return row_count
 
-    def _normalize_holding_chunk(self, frame: pd.DataFrame, *, month: str, source_file: str, block: str) -> pd.DataFrame:
+    def _normalize_holding_chunk(
+        self, frame: pd.DataFrame, *, month: str, source_file: str, block: str
+    ) -> pd.DataFrame:
         tp_aplic = _series_str(frame, "TP_APLIC")
         tp_ativo = _series_str(frame, "TP_ATIVO")
-        asset_desc = _series_first_present(frame, ("DS_ATIVO", "DS_ATIVO_EXTERIOR", "NM_FUNDO_CLASSE_SUBCLASSE_COTA", "CD_SWAP"))
+        asset_desc = _series_first_present(
+            frame, ("DS_ATIVO", "DS_ATIVO_EXTERIOR", "NM_FUNDO_CLASSE_SUBCLASSE_COTA", "CD_SWAP")
+        )
         asset_class = [
             _asset_class_for(block, aplic, ativo, desc)
-            for aplic, ativo, desc in zip(tp_aplic.tolist(), tp_ativo.tolist(), asset_desc.tolist())
+            for aplic, ativo, desc in zip(tp_aplic.tolist(), tp_ativo.tolist(), asset_desc.tolist(), strict=False)
         ]
         country = _series_str(frame, "PAIS")
         country_code = _series_str(frame, "CD_PAIS")
@@ -2405,8 +2573,12 @@ class CvmCdaService:
                 ),
                 "asset_desc": asset_desc,
                 "isin": _series_str(frame, "CD_ISIN"),
-                "issuer_name": _series_first_present(frame, ("EMISSOR", "INVEST_COLETIVO_GESTOR", "NM_FUNDO_CLASSE_SUBCLASSE_COTA")),
-                "issuer_doc": _series_first_present(frame, ("CPF_CNPJ_EMISSOR", "CNPJ_EMISSOR", "CNPJ_FUNDO_CLASSE_COTA")),
+                "issuer_name": _series_first_present(
+                    frame, ("EMISSOR", "INVEST_COLETIVO_GESTOR", "NM_FUNDO_CLASSE_SUBCLASSE_COTA")
+                ),
+                "issuer_doc": _series_first_present(
+                    frame, ("CPF_CNPJ_EMISSOR", "CNPJ_EMISSOR", "CNPJ_FUNDO_CLASSE_COTA")
+                ),
                 "risk_issuer": _series_str(frame, "RISCO_EMISSOR"),
                 "country_code": country_code,
                 "country": country,
@@ -2421,7 +2593,9 @@ class CvmCdaService:
         )
         output["maturity_bucket"] = [
             _maturity_bucket(maturity_date, as_of_date)
-            for maturity_date, as_of_date in zip(output["maturity_date"].tolist(), output["dt_comptc"].tolist())
+            for maturity_date, as_of_date in zip(
+                output["maturity_date"].tolist(), output["dt_comptc"].tolist(), strict=False
+            )
         ]
         output["is_confidential"] = 1 if "CONFID" in block else 0
         output["is_foreign"] = (
@@ -2431,11 +2605,21 @@ class CvmCdaService:
         ).astype(int)
         output["is_fund_quota"] = output["asset_class"].eq("Cotas de Fundos").astype(int)
         output["is_derivative"] = output["asset_class"].eq("Derivativos").astype(int)
-        output["is_related_issuer"] = _series_str(frame, "EMISSOR_LIGADO").str.upper().eq("S").astype(int)
-        output["country"] = output["country"].where(output["country"].astype(str).str.strip() != "", "BRASIL")
-        output["country_code"] = output["country_code"].where(output["country_code"].astype(str).str.strip() != "", "BR")
-        output["issuer_name"] = output["issuer_name"].where(output["issuer_name"].astype(str).str.strip() != "", output["asset_desc"])
-        output["asset_code"] = output["asset_code"].where(output["asset_code"].astype(str).str.strip() != "", output["asset_desc"])
+        output["is_related_issuer"] = (
+            _series_str(frame, "EMISSOR_LIGADO").str.upper().eq("S").astype(int)
+        )
+        output["country"] = output["country"].where(
+            output["country"].astype(str).str.strip() != "", "BRASIL"
+        )
+        output["country_code"] = output["country_code"].where(
+            output["country_code"].astype(str).str.strip() != "", "BR"
+        )
+        output["issuer_name"] = output["issuer_name"].where(
+            output["issuer_name"].astype(str).str.strip() != "", output["asset_desc"]
+        )
+        output["asset_code"] = output["asset_code"].where(
+            output["asset_code"].astype(str).str.strip() != "", output["asset_desc"]
+        )
         return output[list(HOLDING_CORE_COLUMNS)]
 
     def _build_analytics(self, con: sqlite3.Connection, month: str) -> None:
@@ -2497,17 +2681,31 @@ class CvmCdaService:
             (month,),
         )
 
-        total_abs = con.execute(
-            "SELECT SUM(ABS(value_market)) AS total_abs FROM cvm_cda_holdings WHERE month = ?",
-            (month,),
-        ).fetchone()["total_abs"] or 0
+        total_abs = (
+            con.execute(
+                "SELECT SUM(ABS(value_market)) AS total_abs FROM cvm_cda_holdings WHERE month = ?",
+                (month,),
+            ).fetchone()["total_abs"]
+            or 0
+        )
         self._insert_summary(con, month, "asset_class", "asset_class", "asset_class", total_abs)
-        self._insert_summary(con, month, "asset_subclass", "asset_subclass", "asset_subclass", total_abs)
+        self._insert_summary(
+            con, month, "asset_subclass", "asset_subclass", "asset_subclass", total_abs
+        )
         self._insert_summary(con, month, "fund_type", "fund_type", "fund_type", total_abs)
         self._insert_summary(con, month, "country", "country", "country", total_abs)
         self._insert_summary(con, month, "issuer", "issuer_name", "issuer_name", total_abs)
-        self._insert_summary(con, month, "security", "COALESCE(NULLIF(asset_code, ''), asset_desc)", "COALESCE(NULLIF(asset_desc, ''), asset_code)", total_abs)
-        self._insert_summary(con, month, "maturity_bucket", "maturity_bucket", "maturity_bucket", total_abs)
+        self._insert_summary(
+            con,
+            month,
+            "security",
+            "COALESCE(NULLIF(asset_code, ''), asset_desc)",
+            "COALESCE(NULLIF(asset_desc, ''), asset_code)",
+            total_abs,
+        )
+        self._insert_summary(
+            con, month, "maturity_bucket", "maturity_bucket", "maturity_bucket", total_abs
+        )
         self._insert_related_summary(con, month, total_abs)
 
         con.execute(
@@ -2623,7 +2821,9 @@ class CvmCdaService:
             (dimension, total_abs, total_abs, month),
         )
 
-    def _insert_related_summary(self, con: sqlite3.Connection, month: str, total_abs: float) -> None:
+    def _insert_related_summary(
+        self, con: sqlite3.Connection, month: str, total_abs: float
+    ) -> None:
         con.execute(
             """
             INSERT INTO cvm_cda_summary_group (
@@ -2647,21 +2847,28 @@ class CvmCdaService:
             (total_abs, total_abs, month),
         )
 
-    def _summary_rows(self, con: sqlite3.Connection, month: str, dimension: str, limit: int) -> list[dict[str, Any]]:
-        return [dict(row) for row in con.execute(
-            """
+    def _summary_rows(
+        self, con: sqlite3.Connection, month: str, dimension: str, limit: int
+    ) -> list[dict[str, Any]]:
+        return [
+            dict(row)
+            for row in con.execute(
+                """
             SELECT key, label, row_count, fund_count, value, abs_value, share_value_pct, extra_json
             FROM cvm_cda_summary_group
             WHERE month = ? AND dimension = ?
             ORDER BY abs_value DESC
             LIMIT ?
             """,
-            (month, dimension, limit),
-        ).fetchall()]
+                (month, dimension, limit),
+            ).fetchall()
+        ]
 
     def _build_heatmap(self, con: sqlite3.Connection, month: str) -> dict[str, Any]:
-        top_fund_types = [row["fund_type"] for row in con.execute(
-            """
+        top_fund_types = [
+            row["fund_type"]
+            for row in con.execute(
+                """
             SELECT fund_type
             FROM cvm_cda_fund_type_asset_exposure
             WHERE month = ?
@@ -2669,10 +2876,13 @@ class CvmCdaService:
             ORDER BY SUM(abs_value) DESC
             LIMIT 14
             """,
-            (month,),
-        ).fetchall()]
-        top_assets = [row["asset_class"] for row in con.execute(
-            """
+                (month,),
+            ).fetchall()
+        ]
+        top_assets = [
+            row["asset_class"]
+            for row in con.execute(
+                """
             SELECT asset_class
             FROM cvm_cda_fund_type_asset_exposure
             WHERE month = ?
@@ -2680,16 +2890,20 @@ class CvmCdaService:
             ORDER BY SUM(abs_value) DESC
             LIMIT 10
             """,
-            (month,),
-        ).fetchall()]
-        rows = [dict(row) for row in con.execute(
-            """
+                (month,),
+            ).fetchall()
+        ]
+        rows = [
+            dict(row)
+            for row in con.execute(
+                """
             SELECT fund_type, asset_class, value, abs_value, fund_count, holding_count
             FROM cvm_cda_fund_type_asset_exposure
             WHERE month = ?
             """,
-            (month,),
-        ).fetchall()]
+                (month,),
+            ).fetchall()
+        ]
         by_cell = {(row["fund_type"], row["asset_class"]): row for row in rows}
         matrix: list[list[float]] = []
         cells: list[dict[str, Any]] = []
@@ -2769,7 +2983,7 @@ class CvmCdaService:
                 or _parse_date_text(latest_report.get("as_of_date"))
                 or _local_now().date()
             )
-            informe_df, _ = flow_service._load_informe_diario(
+            informe_df, _ = flow_service.cvm_source.load_informe_diario(
                 start_date=requested_end - timedelta(days=10),
                 end_date=requested_end,
                 force=False,
@@ -2807,13 +3021,26 @@ class CvmCdaService:
         per_page = max(1, min(per_page, max_per_page))
         return page, per_page, (page - 1) * per_page
 
-    def _log(self, con: sqlite3.Connection, month: str, level: str, message: str, detail: dict[str, Any] | None = None) -> None:
+    def _log(
+        self,
+        con: sqlite3.Connection,
+        month: str,
+        level: str,
+        message: str,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
         con.execute(
             """
             INSERT INTO cvm_cda_ingest_logs (month, event_at, level, message, detail_json)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (month, _utc_now(), level, message, json.dumps(_clean_json(detail or {}), ensure_ascii=False)),
+            (
+                month,
+                _utc_now(),
+                level,
+                message,
+                json.dumps(_clean_json(detail or {}), ensure_ascii=False),
+            ),
         )
 
     def _build_insights(
@@ -2829,9 +3056,11 @@ class CvmCdaService:
         return {
             "agent": "CvmCdaInsightAgent-ready",
             "quick_read": [
-                f"Carteira CDA {report.get('period_label')} cobre {int(kpis.get('funds') or 0):,} fundos e {int(kpis.get('holdings') or 0):,} posicoes reportadas.".replace(",", "."),
+                f"Carteira CDA {report.get('period_label')} cobre {int(kpis.get('funds') or 0):,} fundos e {int(kpis.get('holdings') or 0):,} posicoes reportadas.".replace(
+                    ",", "."
+                ),
                 f"Maior classe por valor absoluto: {asset_leader.get('label') or '-'} ({(asset_leader.get('share_value_pct') or 0):.1f}% do valor reportado).",
-                f"Maior pais declarado: {country_leader.get('label') or '-'}; maior emissor/agregado: {issuer_leader.get('label') or '-'}."
+                f"Maior pais declarado: {country_leader.get('label') or '-'}; maior emissor/agregado: {issuer_leader.get('label') or '-'}.",
             ],
             "risk_flags": [
                 "Separar leitura de estoque de carteira de fluxo de cotistas: CDA e Informe Diario se complementam.",

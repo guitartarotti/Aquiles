@@ -254,7 +254,7 @@ class OptionsModelingService:
         }
         payload["daily_insights"] = self.daily_insights.get_or_create(
             underlying_security=underlying_security,
-            trade_date=payload["session_date"],
+            trade_date=str(payload["session_date"]),
             sign_convention=run_config.sign_convention,
             summary=summary,
             pressure=pressure,

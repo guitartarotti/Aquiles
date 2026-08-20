@@ -5,7 +5,7 @@ import json
 import math
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from ...config import Config
 from ...utils.logger import get_logger
@@ -48,8 +48,11 @@ def _parse_iso(value: Any) -> datetime | None:
         return None
 
 
-def _deep_copy_json(value: Any) -> Any:
-    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+T = TypeVar("T")
+
+
+def _deep_copy_json(value: T) -> T:
+    return cast(T, json.loads(json.dumps(value, ensure_ascii=False, default=str)))
 
 
 class RegimePriceMakingService:

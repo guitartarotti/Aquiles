@@ -1093,7 +1093,7 @@ class FairValueLegsModelMixin:
 
     @staticmethod
     def _dot(left: list[float], right: list[float]) -> float:
-        return sum(a * b for a, b in zip(left, right))
+        return sum(a * b for a, b in zip(left, right, strict=False))
 
     @classmethod
     def _rls_update(

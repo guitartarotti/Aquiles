@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from flask import Flask, current_app, g, has_request_context, jsonify, request
+from flask import Flask, Response, current_app, g, has_request_context, jsonify, request
+from flask.typing import ResponseReturnValue
 from werkzeug.exceptions import HTTPException
 
 FORBIDDEN_PUBLIC_ERROR_KEYS = frozenset(
@@ -53,7 +54,7 @@ def error_response(
     message: str | None = None,
     exception: Exception | None = None,
     extra: dict[str, Any] | None = None,
-):
+) -> tuple[Response, int]:
     """Log the internal exception and return a stable, non-sensitive API error."""
     request_id = getattr(g, "request_id", None) if has_request_context() else None
     if exception is not None:
@@ -73,7 +74,7 @@ def error_response(
     if extra:
         payload.update(extra)
     response = jsonify(payload)
-    response._aquiles_safe_error = True
+    setattr(response, "_aquiles_safe_error", True)
     return response, status_code
 
 
@@ -82,7 +83,7 @@ def register_error_handlers(app: Flask) -> None:
     logger = app.logger
 
     @app.after_request
-    def sanitize_server_error(response):
+    def sanitize_server_error(response: Response) -> Response:
         """Enforce the public 5xx contract even for legacy route handlers."""
         if request.path != "/health" and not request.path.startswith("/api/"):
             return response
@@ -129,7 +130,7 @@ def register_error_handlers(app: Flask) -> None:
         return response
 
     @app.errorhandler(HTTPException)
-    def handle_http_error(exc: HTTPException):
+    def handle_http_error(exc: HTTPException) -> ResponseReturnValue | HTTPException:
         if not request.path.startswith("/api/"):
             return exc
         return error_response(
@@ -139,7 +140,7 @@ def register_error_handlers(app: Flask) -> None:
         )
 
     @app.errorhandler(Exception)
-    def handle_unexpected_error(exc: Exception):
+    def handle_unexpected_error(exc: Exception) -> ResponseReturnValue:
         if not request.path.startswith("/api/"):
             raise exc
         return error_response(logger, exception=exc)

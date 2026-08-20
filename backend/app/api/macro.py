@@ -3,16 +3,18 @@ Macro live feed API routes.
 """
 
 import logging
-import os
 import sqlite3
 import threading
 import time
 from datetime import datetime, timezone
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from flask import jsonify, request
+from flask.typing import ResponseReturnValue
 
 from ..auth import require_role
+from ..container import get_container
 from ..http import error_response
 from ..models.task import TaskManager, TaskStatus
 from ..services.bloomberg_desktop_service import BloombergDesktopService
@@ -29,10 +31,7 @@ from ..services.macro_live_service import (
 from ..services.macro_market_overview_service import MacroMarketOverviewService
 from ..services.macro_thermometer_service import MacroThermometerService
 from ..services.macro_trend_service import MacroTrendService
-from ..services.market_screen_capture_service import (
-    MarketScreenCaptureCollectorManager,
-    MarketScreenCaptureService,
-)
+from ..services.market_screen_capture_service import MarketScreenCaptureService
 from ..services.market_screen_chart_service import MarketScreenChartService
 from ..services.report_source_discovery_service import (
     ReportSourceDiscoveryManager,
@@ -42,14 +41,24 @@ from . import macro_bp
 from .legacy_heatmap_proxy import legacy_heatmap_proxy_or_disabled
 
 market_screen_chart_service = MarketScreenChartService()
-macro_curve_discovery_service = MacroCurveDiscoveryService(chart_service=market_screen_chart_service)
+macro_curve_discovery_service = MacroCurveDiscoveryService(
+    chart_service=market_screen_chart_service
+)
 fair_value_legs_chart_service = FairValueLegsChartService(chart_service=market_screen_chart_service)
 report_source_discovery_service = ReportSourceDiscoveryService()
 LOCAL_TZ = ZoneInfo("America/Sao_Paulo")
 logger = logging.getLogger(__name__)
 
 
-def _is_truthy(value) -> bool:
+def _macro_collector() -> MacroCollectorManager:
+    return get_container().macro_collector()
+
+
+def _report_source_collector() -> ReportSourceDiscoveryManager:
+    return get_container().report_source_collector()
+
+
+def _is_truthy(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -63,36 +72,40 @@ def _curve_keys_from_request() -> list[str]:
     return values
 
 
-@macro_bp.route('/snapshot', methods=['GET'])
-def get_snapshot():
+@macro_bp.route("/snapshot", methods=["GET"])
+def get_snapshot() -> ResponseReturnValue:
     try:
-        limit_events = max(1, min(int(request.args.get('limit_events', 20)), 100))
+        limit_events = max(1, min(int(request.args.get("limit_events", 20)), 100))
         service = MacroIngestionService(store=MacroStateStore())
         state = service.get_snapshot(limit_events=limit_events)
-        state["collector"] = MacroCollectorManager.get_instance().status()
+        state["collector"] = _macro_collector().status()
 
-        return jsonify({
-            "success": True,
-            "data": state,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": state,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/events', methods=['GET'])
-def list_events():
+@macro_bp.route("/events", methods=["GET"])
+def list_events() -> ResponseReturnValue:
     """Legacy endpoint – retorna até 100 eventos do recent_events (estado em memória)."""
     try:
-        limit  = max(1, min(int(request.args.get('limit', 20)), 100))
-        source = request.args.get('source') or None
-        store  = MacroStateStore()
-        state  = store.read_state()
+        limit = max(1, min(int(request.args.get("limit", 20)), 100))
+        source = request.args.get("source") or None
+        store = MacroStateStore()
+        state = store.read_state()
         events = state.get("recent_events", []) or []
         if source:
             events = [e for e in events if e.get("source") == source]
         ingestion = MacroIngestionService(store=store)
-        snapshot  = state.get("snapshot", {}) or {}
-        events = ingestion.reclassify_news_events(events, market_snapshot=(snapshot.get("market") or {}))
+        snapshot = state.get("snapshot", {}) or {}
+        events = ingestion.reclassify_news_events(
+            events, market_snapshot=(snapshot.get("market") or {})
+        )
         events.sort(key=lambda e: e.get("event_time") or "", reverse=True)
         events = events[:limit]
         return jsonify({"success": True, "data": {"events": events, "count": len(events)}})
@@ -104,30 +117,32 @@ def list_events():
 import json as _json
 import os as _os
 
-_today_cache_lock    = threading.Lock()   # protege o dict de cache
-_today_refresh_lock  = threading.Lock()   # garante apenas 1 refresh por vez
-_today_cache: dict   = {"date": None, "events": [], "ts": 0.0}
-_TODAY_CACHE_TTL     = 300  # 5 minutos — JSONL tem 38 MB, releitura é cara
+_today_cache_lock = threading.Lock()  # protege o dict de cache
+_today_refresh_lock = threading.Lock()  # garante apenas 1 refresh por vez
+_today_cache: dict[str, Any] = {"date": None, "events": [], "ts": 0.0}
+_TODAY_CACHE_TTL = 300  # 5 minutos — JSONL tem 38 MB, releitura é cara
 
 
 def _today_str() -> str:
     import datetime
+
     try:
         from zoneinfo import ZoneInfo
-        tz = ZoneInfo("America/Sao_Paulo")
+
+        tz: datetime.tzinfo = ZoneInfo("America/Sao_Paulo")
     except Exception:
         tz = datetime.timezone(datetime.timedelta(hours=-3))
     return datetime.datetime.now(tz).date().isoformat()
 
 
-def _read_today_fast(today: str) -> list:
+def _read_today_fast(today: str) -> list[dict[str, Any]]:
     """
     Lê o JSONL filtrando por pré-verificação de string antes de parsear JSON.
     Evita parsear 27k entradas históricas — só parseia linhas que contêm
     a data de hoje, reduzindo o tempo de ~10s para < 1s.
     """
     store = MacroStateStore()
-    by_id: dict = {}
+    by_id: dict[str, dict[str, Any]] = {}
 
     # ── 1. JSONL (leitura rápida com pré-filtro) ────────────────────────────
     events_path = store.events_path
@@ -135,7 +150,7 @@ def _read_today_fast(today: str) -> list:
         try:
             with open(events_path, "r", encoding="utf-8") as f:
                 for raw in f:
-                    if today not in raw:          # pré-filtro: string check antes de JSON parse
+                    if today not in raw:  # pré-filtro: string check antes de JSON parse
                         continue
                     raw = raw.strip()
                     if not raw:
@@ -169,14 +184,14 @@ def _read_today_fast(today: str) -> list:
     return events
 
 
-def _get_today_events() -> list:
+def _get_today_events() -> list[dict[str, Any]]:
     """
     Retorna todos os eventos de hoje.
     Cache de 5 min; apenas 1 thread refaz a leitura — as demais recebem
     o cache atual (stale-while-revalidate) e não bloqueiam.
     """
     today = _today_str()
-    now   = time.monotonic()
+    now = time.monotonic()
 
     # Verificação rápida — cache fresco
     with _today_cache_lock:
@@ -191,7 +206,7 @@ def _get_today_events() -> list:
         # Outro thread já está atualizando — devolve stale ou aguarda
         if stale is not None:
             return stale
-        with _today_refresh_lock:   # aguarda o refresh terminar
+        with _today_refresh_lock:  # aguarda o refresh terminar
             pass
         with _today_cache_lock:
             return list(_today_cache["events"])
@@ -199,16 +214,16 @@ def _get_today_events() -> list:
     try:
         events = _read_today_fast(today)
         with _today_cache_lock:
-            _today_cache["date"]   = today
+            _today_cache["date"] = today
             _today_cache["events"] = events
-            _today_cache["ts"]     = time.monotonic()
+            _today_cache["ts"] = time.monotonic()
         return events
     finally:
         _today_refresh_lock.release()
 
 
-@macro_bp.route('/events/today', methods=['GET'])
-def list_events_today():
+@macro_bp.route("/events/today", methods=["GET"])
+def list_events_today() -> ResponseReturnValue:
     """
     Retorna TODOS os eventos de hoje paginados (100 por página).
 
@@ -232,10 +247,10 @@ def list_events_today():
         }
     """
     try:
-        limit     = max(1, min(int(request.args.get('limit', 100)), 100))
-        offset    = max(0, int(request.args.get('offset', 0)))
-        source    = request.args.get('source')    or None
-        relevance = request.args.get('relevance') or None
+        limit = max(1, min(int(request.args.get("limit", 100)), 100))
+        offset = max(0, int(request.args.get("offset", 0)))
+        source = request.args.get("source") or None
+        relevance = request.args.get("relevance") or None
 
         all_events = _get_today_events()
 
@@ -245,104 +260,116 @@ def list_events_today():
         if relevance:
             all_events = [e for e in all_events if e.get("relevance") == relevance]
 
-        total       = len(all_events)
-        total_pages = max(1, -(-total // limit))   # ceiling division
-        page        = offset // limit + 1
-        page_events = all_events[offset: offset + limit]
+        total = len(all_events)
+        total_pages = max(1, -(-total // limit))  # ceiling division
+        page = offset // limit + 1
+        page_events = all_events[offset : offset + limit]
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "events":      page_events,
-                "count":       len(page_events),
-                "total":       total,
-                "total_pages": total_pages,
-                "page":        page,
-                "offset":      offset,
-                "limit":       limit,
-            },
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "events": page_events,
+                    "count": len(page_events),
+                    "total": total,
+                    "total_pages": total_pages,
+                    "page": page,
+                    "offset": offset,
+                    "limit": limit,
+                },
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/overview', methods=['GET'])
-def get_macro_overview():
+@macro_bp.route("/overview", methods=["GET"])
+def get_macro_overview() -> ResponseReturnValue:
     try:
-        participant_limit = max(1, min(int(request.args.get('participant_limit', 12)), 40))
-        news_limit = max(1, min(int(request.args.get('news_limit', 5)), 20))
+        participant_limit = max(1, min(int(request.args.get("participant_limit", 12)), 40))
+        news_limit = max(1, min(int(request.args.get("news_limit", 5)), 20))
         service = MacroMarketOverviewService(store=MacroStateStore())
         result = service.get_overview(
             participant_limit=participant_limit,
             news_limit=news_limit,
         )
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/bloomberg/status', methods=['GET'])
-def get_bloomberg_status():
+@macro_bp.route("/bloomberg/status", methods=["GET"])
+def get_bloomberg_status() -> ResponseReturnValue:
     try:
         service = BloombergDesktopService()
-        return jsonify({
-            "success": True,
-            "data": service.status(),
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": service.status(),
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/bloomberg/capture', methods=['POST'])
-def capture_bloomberg_reference_assets():
+@macro_bp.route("/bloomberg/capture", methods=["POST"])
+def capture_bloomberg_reference_assets() -> ResponseReturnValue:
     try:
         service = BloombergDesktopService()
         assets, status = service.capture_reference_assets()
-        return jsonify({
-            "success": True,
-            "data": {
-                "status": status,
-                "assets": assets,
-            },
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "status": status,
+                    "assets": assets,
+                },
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/thermometer', methods=['GET'])
-def get_macro_thermometer():
+@macro_bp.route("/thermometer", methods=["GET"])
+def get_macro_thermometer() -> ResponseReturnValue:
     try:
-        refresh = str(request.args.get('refresh', 'false')).lower() == 'true'
+        refresh = str(request.args.get("refresh", "false")).lower() == "true"
         service = MacroThermometerService(store=MacroStateStore())
         result = service.get_thermometer(refresh=refresh)
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/cross-asset', methods=['GET'])
-def get_macro_cross_asset():
+@macro_bp.route("/cross-asset", methods=["GET"])
+def get_macro_cross_asset() -> ResponseReturnValue:
     try:
-        limit = max(1, min(int(request.args.get('limit', 80)), 120))
-        refresh = str(request.args.get('refresh', 'false')).lower() == 'true'
+        limit = max(1, min(int(request.args.get("limit", 80)), 120))
+        refresh = str(request.args.get("refresh", "false")).lower() == "true"
         service = MacroCrossAssetService(store=MacroStateStore())
         result = service.get_engine(limit=limit, refresh=refresh)
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/participant-heatmap', methods=['GET'])
-def get_macro_participant_heatmap():
+@macro_bp.route("/participant-heatmap", methods=["GET"])
+def get_macro_participant_heatmap() -> ResponseReturnValue:
     return legacy_heatmap_proxy_or_disabled(
         "/api/macro/participant-heatmap",
         feature="Participant heatmap",
@@ -350,105 +377,117 @@ def get_macro_participant_heatmap():
     )
 
 
-@macro_bp.route('/drivers', methods=['GET'])
-def list_macro_drivers():
+@macro_bp.route("/drivers", methods=["GET"])
+def list_macro_drivers() -> ResponseReturnValue:
     try:
-        limit = max(1, min(int(request.args.get('limit', 12)), 100))
-        refresh = str(request.args.get('refresh', 'false')).lower() == 'true'
+        limit = max(1, min(int(request.args.get("limit", 12)), 100))
+        refresh = str(request.args.get("refresh", "false")).lower() == "true"
         service = MacroDriverService(store=MacroStateStore())
         result = service.list_drivers(limit=limit, refresh=refresh)
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/drivers/focus', methods=['POST'])
-def focus_macro_driver():
+@macro_bp.route("/drivers/focus", methods=["POST"])
+def focus_macro_driver() -> ResponseReturnValue:
     try:
         data = request.get_json(silent=True) or {}
         store = MacroStateStore()
         service = MacroDriverService(store=store)
         result = service.focus_driver(
-            driver_id=data.get('driver_id', ''),
-            refresh=bool(data.get('refresh', False)),
+            driver_id=data.get("driver_id", ""),
+            refresh=bool(data.get("refresh", False)),
         )
         cross_service = MacroCrossAssetService(store=store)
         result["driver_cross_asset"] = cross_service.focus_driver(
-            driver_id=data.get('driver_id', ''),
-            refresh=bool(data.get('refresh', False)),
+            driver_id=data.get("driver_id", ""),
+            refresh=bool(data.get("refresh", False)),
         )
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/collector/status', methods=['GET'])
-def collector_status():
+@macro_bp.route("/collector/status", methods=["GET"])
+def collector_status() -> ResponseReturnValue:
     try:
-        return jsonify({
-            "success": True,
-            "data": MacroCollectorManager.get_instance().status(),
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": _macro_collector().status(),
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/collector/start', methods=['POST'])
+@macro_bp.route("/collector/start", methods=["POST"])
 @require_role("admin")
-def start_collector():
+def start_collector() -> ResponseReturnValue:
     try:
         data = request.get_json(silent=True) or {}
-        interval_seconds = data.get('interval_seconds')
+        interval_seconds = data.get("interval_seconds")
         if interval_seconds is not None:
             interval_seconds = int(interval_seconds)
 
-        status = MacroCollectorManager.get_instance().start(interval_seconds=interval_seconds)
-        return jsonify({
-            "success": True,
-            "data": status,
-        })
+        status = _macro_collector().start(interval_seconds=interval_seconds)
+        return jsonify(
+            {
+                "success": True,
+                "data": status,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/collector/stop', methods=['POST'])
+@macro_bp.route("/collector/stop", methods=["POST"])
 @require_role("admin")
-def stop_collector():
+def stop_collector() -> ResponseReturnValue:
     try:
-        status = MacroCollectorManager.get_instance().stop()
-        return jsonify({
-            "success": True,
-            "data": status,
-        })
+        status = _macro_collector().stop()
+        return jsonify(
+            {
+                "success": True,
+                "data": status,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/collect', methods=['POST'])
-def collect_once():
+@macro_bp.route("/collect", methods=["POST"])
+def collect_once() -> ResponseReturnValue:
     try:
         data = request.get_json(silent=True) or {}
-        include_news = data.get('include_news', True)
-        include_market = data.get('include_market', True)
-        run_async = data.get('async', True)
+        include_news = data.get("include_news", True)
+        include_market = data.get("include_market", True)
+        run_async = data.get("async", True)
 
-        collector = MacroCollectorManager.get_instance()
+        collector = _macro_collector()
 
         if not run_async:
             result = collector.collect_once(
                 include_news=include_news,
                 include_market=include_market,
             )
-            return jsonify({
-                "success": True,
-                "data": result,
-            })
+            return jsonify(
+                {
+                    "success": True,
+                    "data": result,
+                }
+            )
 
         task_manager = TaskManager()
         task_id = task_manager.create_task(
@@ -459,7 +498,7 @@ def collect_once():
             },
         )
 
-        def run_collect():
+        def run_collect() -> None:
             try:
                 task_manager.update_task(
                     task_id,
@@ -490,152 +529,161 @@ def collect_once():
         thread = threading.Thread(target=run_collect, daemon=True)
         thread.start()
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "task_id": task_id,
-                "message": "Macro collection started",
-            },
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "task_id": task_id,
+                    "message": "Macro collection started",
+                },
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/task/<task_id>', methods=['GET'])
-def get_macro_task(task_id: str):
+@macro_bp.route("/task/<task_id>", methods=["GET"])
+def get_macro_task(task_id: str) -> ResponseReturnValue:
     task = TaskManager().get_task(task_id)
 
     if not task:
-        return jsonify({
-            "success": False,
-            "error": f"Task not found: {task_id}",
-        }), 404
+        return jsonify(
+            {
+                "success": False,
+                "error": f"Task not found: {task_id}",
+            }
+        ), 404
 
-    return jsonify({
-        "success": True,
-        "data": task.to_dict(),
-    })
+    return jsonify(
+        {
+            "success": True,
+            "data": task.to_dict(),
+        }
+    )
 
 
-@macro_bp.route('/project/sync', methods=['POST'])
-def sync_snapshot_to_project():
+@macro_bp.route("/project/sync", methods=["POST"])
+def sync_snapshot_to_project() -> ResponseReturnValue:
     try:
         data = request.get_json(silent=True) or {}
         projection = MacroProjectionService()
         result = projection.sync_snapshot_to_project(
-            project_id=data.get('project_id'),
-            project_name=data.get('project_name'),
-            simulation_requirement=data.get('simulation_requirement'),
-            include_recent_events=int(data.get('include_recent_events', 20)),
+            project_id=data.get("project_id"),
+            project_name=data.get("project_name"),
+            simulation_requirement=data.get("simulation_requirement"),
+            include_recent_events=int(data.get("include_recent_events", 20)),
         )
         project = result["project"]
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "project_id": project.project_id,
-                "project": project.to_dict(),
-                "snapshot_generated_at": result["snapshot_generated_at"],
-                "artifact_path": result["artifact_path"],
-                "markdown_preview": result["markdown_preview"],
-            },
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "project_id": project.project_id,
+                    "project": project.to_dict(),
+                    "snapshot_generated_at": result["snapshot_generated_at"],
+                    "artifact_path": result["artifact_path"],
+                    "markdown_preview": result["markdown_preview"],
+                },
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/trends', methods=['GET'])
-def list_macro_trends():
+@macro_bp.route("/trends", methods=["GET"])
+def list_macro_trends() -> ResponseReturnValue:
     try:
-        limit = max(1, min(int(request.args.get('limit', 8)), 20))
+        limit = max(1, min(int(request.args.get("limit", 8)), 20))
         service = MacroTrendService(store=MacroStateStore())
         result = service.list_trends(
             limit=limit,
-            project_id=request.args.get('project_id'),
-            graph_id=request.args.get('graph_id'),
+            project_id=request.args.get("project_id"),
+            graph_id=request.args.get("graph_id"),
         )
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/trends/focus', methods=['POST'])
-def focus_macro_trend():
+@macro_bp.route("/trends/focus", methods=["POST"])
+def focus_macro_trend() -> ResponseReturnValue:
     try:
         data = request.get_json(silent=True) or {}
         service = MacroTrendService(store=MacroStateStore())
         result = service.focus_trend(
-            trend_id=data.get('trend_id', ''),
-            project_id=data.get('project_id'),
-            graph_id=data.get('graph_id'),
-            comment_count=int(data.get('comment_count', 6)),
+            trend_id=data.get("trend_id", ""),
+            project_id=data.get("project_id"),
+            graph_id=data.get("graph_id"),
+            comment_count=int(data.get("comment_count", 6)),
         )
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/capture', methods=['POST'])
-def capture_w32_basica_screen():
+@macro_bp.route("/screen-capture/w32-basica/capture", methods=["POST"])
+def capture_w32_basica_screen() -> ResponseReturnValue:
     try:
-        if _is_truthy(os.environ.get("AQUILES_DISABLE_MARKET_SCREEN_COLLECTOR")):
-            return jsonify({
+        return jsonify(
+            {
                 "success": False,
-                "error": "Market screen capture is owned by the external collector process.",
-            }), 409
-        data = request.get_json(silent=True) or {}
-        service = MarketScreenCaptureService()
-        result = service.capture_w32_basica(
-            persist=not _is_truthy(data.get('no_persist')),
-            save_image=not _is_truthy(data.get('no_image')),
-            title_query=data.get('window_title'),
-            fallback_monitor_index=data.get('fallback_monitor_index'),
-        )
-        status_code = 200 if result.get("ok") else 422
-        return jsonify({
-            "success": bool(result.get("ok")),
-            "data": result,
-        }), status_code
+                "error": "Market screen capture is owned by aquiles-market-capture.",
+            }
+        ), 409
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/latest', methods=['GET'])
-def latest_w32_basica_screen_capture():
+@macro_bp.route("/screen-capture/w32-basica/latest", methods=["GET"])
+def latest_w32_basica_screen_capture() -> ResponseReturnValue:
     try:
         service = MarketScreenCaptureService()
         result = service.read_latest_capture()
         if not result:
-            return jsonify({
-                "success": False,
-                "error": "No market screen capture available yet.",
-            }), 404
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "No market screen capture available yet.",
+                }
+            ), 404
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/latest-symbol', methods=['GET'])
-def latest_w32_basica_symbol():
+@macro_bp.route("/screen-capture/w32-basica/latest-symbol", methods=["GET"])
+def latest_w32_basica_symbol() -> ResponseReturnValue:
     try:
-        requested_symbol = request.args.get('symbol') or 'XB1'
-        resolved_symbol = market_screen_chart_service._resolve_symbol(requested_symbol) or str(requested_symbol).strip()
+        requested_symbol = request.args.get("symbol") or "XB1"
+        resolved_symbol = (
+            market_screen_chart_service._resolve_symbol(requested_symbol)
+            or str(requested_symbol).strip()
+        )
         service = MarketScreenCaptureService()
         payload = service.read_latest_capture()
         if not payload:
-            return jsonify({
-                "success": False,
-                "error": "No market screen capture available yet.",
-            }), 404
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "No market screen capture available yet.",
+                }
+            ), 404
 
         row_match = None
         for row in payload.get("rows") or []:
@@ -649,123 +697,148 @@ def latest_w32_basica_symbol():
                 break
 
         if not row_match:
-            return jsonify({
-                "success": False,
-                "error": f"Symbol not available in latest capture: {resolved_symbol}",
-            }), 404
+            return jsonify(
+                {
+                    "success": False,
+                    "error": f"Symbol not available in latest capture: {resolved_symbol}",
+                }
+            ), 404
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "symbol": resolved_symbol,
-                "captured_at": payload.get("captured_at"),
-                "capture_id": payload.get("capture_id"),
-                "price": row_match.get("price"),
-                "daily_change_pct": row_match.get("daily_change_pct"),
-                "source": "w32_latest_symbol",
-            },
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "symbol": resolved_symbol,
+                    "captured_at": payload.get("captured_at"),
+                    "capture_id": payload.get("capture_id"),
+                    "price": row_match.get("price"),
+                    "daily_change_pct": row_match.get("daily_change_pct"),
+                    "source": "w32_latest_symbol",
+                },
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/collector/status', methods=['GET'])
-def w32_basica_collector_status():
+@macro_bp.route("/screen-capture/w32-basica/collector/status", methods=["GET"])
+def w32_basica_collector_status() -> ResponseReturnValue:
     try:
-        manager = MarketScreenCaptureCollectorManager.get_instance()
-        return jsonify({
-            "success": True,
-            "data": manager.status(),
-        })
+        status = MarketScreenCaptureService().status()
+        status.update({"owner": "aquiles-market-capture", "external": True})
+        return jsonify(
+            {
+                "success": True,
+                "data": status,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/collector/start', methods=['POST'])
+@macro_bp.route("/screen-capture/w32-basica/collector/start", methods=["POST"])
 @require_role("admin")
-def start_w32_basica_collector():
+def start_w32_basica_collector() -> ResponseReturnValue:
     try:
-        if _is_truthy(os.environ.get("AQUILES_DISABLE_MARKET_SCREEN_COLLECTOR")):
-            return jsonify({
+        return jsonify(
+            {
                 "success": False,
-                "error": "Market screen collector is disabled in this process; use aquiles-market-capture.",
-            }), 409
-        manager = MarketScreenCaptureCollectorManager.get_instance()
-        return jsonify({
-            "success": True,
-            "data": manager.start(),
-        })
+                "error": "Market screen collector is managed by PM2 as aquiles-market-capture.",
+            }
+        ), 409
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/collector/stop', methods=['POST'])
+@macro_bp.route("/screen-capture/w32-basica/collector/stop", methods=["POST"])
 @require_role("admin")
-def stop_w32_basica_collector():
+def stop_w32_basica_collector() -> ResponseReturnValue:
     try:
-        manager = MarketScreenCaptureCollectorManager.get_instance()
-        return jsonify({
-            "success": True,
-            "data": manager.stop(),
-        })
+        return jsonify(
+            {
+                "success": False,
+                "error": "Market screen collector is managed by PM2 as aquiles-market-capture.",
+            }
+        ), 409
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/excel-basket/latest', methods=['GET'])
-def latest_w32_basica_excel_basket():
+@macro_bp.route("/screen-capture/w32-basica/excel-basket/latest", methods=["GET"])
+def latest_w32_basica_excel_basket() -> ResponseReturnValue:
     try:
-        manager = MarketScreenCaptureCollectorManager.get_instance()
-        if _is_truthy(request.args.get('refresh')):
-            manager.capture_once()
-        max_age = request.args.get('max_age_seconds')
-        max_age_value = float(max_age) if str(max_age or '').strip() else None
-        result = manager.get_excel_compatible_payload(max_age_seconds=max_age_value)
+        if _is_truthy(request.args.get("refresh")):
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "On-demand capture is owned by aquiles-market-capture.",
+                }
+            ), 409
+        service = MarketScreenCaptureService()
+        latest = service.read_latest_capture()
+        result = (
+            service.build_excel_compatible_payload(latest)
+            if latest
+            else {"ok": False, "error": "market_screen_capture_unavailable"}
+        )
         status_code = 200 if result.get("ok") else 422
-        return jsonify({
-            "success": bool(result.get("ok")),
-            "data": result,
-        }), status_code
+        return jsonify(
+            {
+                "success": bool(result.get("ok")),
+                "data": result,
+            }
+        ), status_code
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/chart', methods=['GET'])
-def w32_basica_chart_payload():
+@macro_bp.route("/screen-capture/w32-basica/chart", methods=["GET"])
+def w32_basica_chart_payload() -> ResponseReturnValue:
     try:
-        include_assets = _is_truthy(request.args.get('include_assets', 'true'))
-        include_collector = _is_truthy(request.args.get('include_collector', 'true'))
-        benchmark_only = _is_truthy(request.args.get('benchmark_only', 'false'))
+        include_assets = _is_truthy(request.args.get("include_assets", "true"))
+        include_collector = _is_truthy(request.args.get("include_collector", "true"))
+        benchmark_only = _is_truthy(request.args.get("benchmark_only", "false"))
         result = market_screen_chart_service.build_payload(
-            symbol=request.args.get('symbol'),
-            benchmark_symbol=request.args.get('benchmark_symbol') or 'XB1',
-            lookback_minutes=int(request.args.get('lookback_minutes', 360)),
-            rolling_window_points=int(request.args.get('rolling_window_points', 60)),
-            max_points=int(request.args.get('max_points', 1200)),
-            bar_minutes=int(request.args.get('bar_minutes') or 0),
+            symbol=request.args.get("symbol"),
+            benchmark_symbol=request.args.get("benchmark_symbol") or "XB1",
+            lookback_minutes=int(request.args.get("lookback_minutes", 360)),
+            rolling_window_points=int(request.args.get("rolling_window_points", 60)),
+            max_points=int(request.args.get("max_points", 1200)),
+            bar_minutes=int(request.args.get("bar_minutes") or 0),
             include_assets=include_assets,
             benchmark_only=benchmark_only,
         )
         if include_collector:
-            result["collector"] = MarketScreenCaptureCollectorManager.get_instance().status()
+            result["collector"] = {
+                **MarketScreenCaptureService().status(),
+                "owner": "aquiles-market-capture",
+                "external": True,
+            }
         status_code = 200 if result.get("ok") else 404
-        response = jsonify({
-            "success": bool(result.get("ok")),
-            "data": result,
-        })
+        response = jsonify(
+            {
+                "success": bool(result.get("ok")),
+                "data": result,
+            }
+        )
         return response, status_code
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/w32-basica/benchmark-candles', methods=['GET'])
-def w32_basica_benchmark_candles():
+@macro_bp.route("/screen-capture/w32-basica/benchmark-candles", methods=["GET"])
+def w32_basica_benchmark_candles() -> ResponseReturnValue:
     try:
-        requested_symbol = request.args.get('symbol') or request.args.get('benchmark_symbol') or 'XB1'
-        resolved_symbol = market_screen_chart_service._resolve_symbol(requested_symbol) or str(requested_symbol).strip()
-        bar_minutes = max(int(request.args.get('bar_minutes') or 5), 1)
-        lookback_minutes = max(int(request.args.get('lookback_minutes') or 10080), 1)
-        max_points = max(int(request.args.get('max_points') or 360), 1)
+        requested_symbol = (
+            request.args.get("symbol") or request.args.get("benchmark_symbol") or "XB1"
+        )
+        resolved_symbol = (
+            market_screen_chart_service._resolve_symbol(requested_symbol)
+            or str(requested_symbol).strip()
+        )
+        bar_minutes = max(int(request.args.get("bar_minutes") or 5), 1)
+        lookback_minutes = max(int(request.args.get("lookback_minutes") or 10080), 1)
+        max_points = max(int(request.args.get("max_points") or 360), 1)
         cutoff_epoch = time.time() - (lookback_minutes * 60)
         since_bucket_epoch = float(int(cutoff_epoch // (bar_minutes * 60)) * (bar_minutes * 60))
 
@@ -801,25 +874,31 @@ def w32_basica_benchmark_candles():
         latest_capture_epoch = None
         for row in rows:
             bucket_epoch = float(row["bucket_epoch"] or 0)
-            local_bucket = datetime.fromtimestamp(bucket_epoch, tz=timezone.utc).astimezone(LOCAL_TZ)
+            local_bucket = datetime.fromtimestamp(bucket_epoch, tz=timezone.utc).astimezone(
+                LOCAL_TZ
+            )
             local_minutes = (local_bucket.hour * 60) + local_bucket.minute
             if local_minutes < 9 * 60 or local_minutes > 18 * 60:
                 continue
             last_capture = row["last_capture_at_epoch"]
             if last_capture is not None:
-                latest_capture_epoch = max(float(last_capture), latest_capture_epoch or float(last_capture))
-            candles.append({
-                "timestamp": row["bucket_at"],
-                "timestamp_ms": int(bucket_epoch * 1000),
-                "open": row["open"],
-                "high": row["high"],
-                "low": row["low"],
-                "close": row["close"],
-                "price": row["close"],
-                "daily_change_pct": row["daily_change_pct"],
-                "sample_count": int(row["sample_count"] or 0),
-                "bar_minutes": bar_minutes,
-            })
+                latest_capture_epoch = max(
+                    float(last_capture), latest_capture_epoch or float(last_capture)
+                )
+            candles.append(
+                {
+                    "timestamp": row["bucket_at"],
+                    "timestamp_ms": int(bucket_epoch * 1000),
+                    "open": row["open"],
+                    "high": row["high"],
+                    "low": row["low"],
+                    "close": row["close"],
+                    "price": row["close"],
+                    "daily_change_pct": row["daily_change_pct"],
+                    "sample_count": int(row["sample_count"] or 0),
+                    "bar_minutes": bar_minutes,
+                }
+            )
 
         candles = MarketScreenChartService._downsample_points(candles, max_points)
         latest_capture_at = (
@@ -845,107 +924,122 @@ def w32_basica_benchmark_candles():
                 "benchmark_candles": candles,
             },
         }
-        return jsonify({
-            "success": bool(payload.get("ok")),
-            "data": payload,
-        }), 200 if payload.get("ok") else 404
+        return jsonify(
+            {
+                "success": bool(payload.get("ok")),
+                "data": payload,
+            }
+        ), 200 if payload.get("ok") else 404
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
 # ─── Admin: compactar CSVs do market screen ───────────────────────────────────
 
-@macro_bp.route('/curves/discovery', methods=['GET'])
-def macro_curves_discovery_payload():
+
+@macro_bp.route("/curves/discovery", methods=["GET"])
+def macro_curves_discovery_payload() -> ResponseReturnValue:
     try:
         result = macro_curve_discovery_service.build_payload(
             curves=_curve_keys_from_request(),
-            lookback_minutes=int(request.args.get('lookback_minutes', 720)),
-            max_points=int(request.args.get('max_points', 720)),
-            include_shape_points=_is_truthy(request.args.get('include_shape_points', 'true')),
-            session_date=request.args.get('session_date') or None,
+            lookback_minutes=int(request.args.get("lookback_minutes", 720)),
+            max_points=int(request.args.get("max_points", 720)),
+            include_shape_points=_is_truthy(request.args.get("include_shape_points", "true")),
+            session_date=request.args.get("session_date") or None,
         )
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/report-sources/panel', methods=['GET'])
-def report_source_discovery_panel():
+@macro_bp.route("/report-sources/panel", methods=["GET"])
+def report_source_discovery_panel() -> ResponseReturnValue:
     try:
-        refresh = _is_truthy(request.args.get('refresh', 'false'))
-        lookback_days = request.args.get('lookback_days')
+        refresh = _is_truthy(request.args.get("refresh", "false"))
+        lookback_days = request.args.get("lookback_days")
         result = report_source_discovery_service.get_panel(
             refresh=refresh,
-            lookback_days=int(lookback_days) if str(lookback_days or '').strip() else None,
+            lookback_days=int(str(lookback_days)) if str(lookback_days or "").strip() else None,
         )
-        result["collector"] = ReportSourceDiscoveryManager.get_instance().status()
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        result["collector"] = _report_source_collector().status()
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/report-sources/collect', methods=['POST'])
-def collect_report_source_discovery():
+@macro_bp.route("/report-sources/collect", methods=["POST"])
+def collect_report_source_discovery() -> ResponseReturnValue:
     try:
         payload = request.get_json(silent=True) or {}
         lookback_days = payload.get("lookback_days")
-        result = ReportSourceDiscoveryManager.get_instance().collect_once(
+        result = _report_source_collector().collect_once(
             force=_is_truthy(payload.get("force", True)),
-            lookback_days=int(lookback_days) if str(lookback_days or '').strip() else None,
+            lookback_days=int(str(lookback_days)) if str(lookback_days or "").strip() else None,
         )
-        result["collector"] = ReportSourceDiscoveryManager.get_instance().status()
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        result["collector"] = _report_source_collector().status()
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/report-sources/status', methods=['GET'])
-def report_source_discovery_status():
+@macro_bp.route("/report-sources/status", methods=["GET"])
+def report_source_discovery_status() -> ResponseReturnValue:
     try:
-        return jsonify({
-            "success": True,
-            "data": ReportSourceDiscoveryManager.get_instance().status(),
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": _report_source_collector().status(),
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/report-sources/collector/start', methods=['POST'])
+@macro_bp.route("/report-sources/collector/start", methods=["POST"])
 @require_role("admin")
-def start_report_source_discovery_collector():
+def start_report_source_discovery_collector() -> ResponseReturnValue:
     try:
-        return jsonify({
-            "success": True,
-            "data": ReportSourceDiscoveryManager.get_instance().start(),
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": _report_source_collector().start(),
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/report-sources/collector/stop', methods=['POST'])
+@macro_bp.route("/report-sources/collector/stop", methods=["POST"])
 @require_role("admin")
-def stop_report_source_discovery_collector():
+def stop_report_source_discovery_collector() -> ResponseReturnValue:
     try:
-        return jsonify({
-            "success": True,
-            "data": ReportSourceDiscoveryManager.get_instance().stop(),
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": _report_source_collector().stop(),
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/curves/discovery/ai', methods=['POST'])
-def macro_curves_discovery_ai():
+@macro_bp.route("/curves/discovery/ai", methods=["POST"])
+def macro_curves_discovery_ai() -> ResponseReturnValue:
     try:
         payload = request.get_json(silent=True) or {}
         raw_curves = payload.get("curves")
@@ -958,31 +1052,38 @@ def macro_curves_discovery_ai():
 
         result = macro_curve_discovery_service.build_ai_view(
             curves=curves,
-            lookback_minutes=int(payload.get('lookback_minutes') or 720),
-            session_date=payload.get('session_date') or None,
+            lookback_minutes=int(payload.get("lookback_minutes") or 720),
+            session_date=payload.get("session_date") or None,
         )
-        return jsonify({
-            "success": True,
-            "data": result,
-        })
+        return jsonify(
+            {
+                "success": True,
+                "data": result,
+            }
+        )
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/fair-value/legs-chart', methods=['POST'])
-def macro_fair_value_legs_chart():
+@macro_bp.route("/fair-value/legs-chart", methods=["POST"])
+def macro_fair_value_legs_chart() -> ResponseReturnValue:
     try:
         payload = request.get_json(silent=True) or {}
-        build_kwargs = dict(
+        build_kwargs: dict[str, Any] = dict(
             config=payload.get("config") if isinstance(payload.get("config"), dict) else payload,
             sessions=int(payload.get("sessions") or 3),
             bar_minutes=int(payload.get("bar_minutes") or 5),
             session_start=str(payload.get("session_start") or "09:00"),
             session_end=str(payload.get("session_end") or "18:30"),
             rolling_window_points=int(payload.get("rolling_window_points") or 60),
-            vol_context=payload.get("vol_context") if isinstance(payload.get("vol_context"), dict) else None,
+            vol_context=payload.get("vol_context")
+            if isinstance(payload.get("vol_context"), dict)
+            else None,
         )
-        config_payload = build_kwargs.get("config") if isinstance(build_kwargs.get("config"), dict) else {}
+        raw_config_payload = build_kwargs.get("config")
+        config_payload: dict[str, Any] = (
+            dict(raw_config_payload) if isinstance(raw_config_payload, dict) else {}
+        )
         is_default_composition = not bool((config_payload or {}).get("legs"))
         min_history_timestamp = None
         try:
@@ -996,17 +1097,18 @@ def macro_fair_value_legs_chart():
         if is_default_composition and not bool(payload.get("force_refresh")):
             snapshot = fair_value_legs_chart_service._load_payload_snapshot()
             if snapshot is not None:
-                snapshot_covers_latest = fair_value_legs_chart_service.payload_covers_latest_available_session(
-                    snapshot,
-                    sessions=build_kwargs["sessions"],
-                )
-                snapshot_last_timestamp = fair_value_legs_chart_service.payload_last_timestamp_ms(snapshot)
-                snapshot_covers_latest_timestamp = (
-                    min_history_timestamp is None
-                    or (
-                        snapshot_last_timestamp is not None
-                        and snapshot_last_timestamp >= min_history_timestamp
+                snapshot_covers_latest = (
+                    fair_value_legs_chart_service.payload_covers_latest_available_session(
+                        snapshot,
+                        sessions=build_kwargs["sessions"],
                     )
+                )
+                snapshot_last_timestamp = fair_value_legs_chart_service.payload_last_timestamp_ms(
+                    snapshot
+                )
+                snapshot_covers_latest_timestamp = min_history_timestamp is None or (
+                    snapshot_last_timestamp is not None
+                    and snapshot_last_timestamp >= min_history_timestamp
                 )
                 if not snapshot_covers_latest:
                     fair_value_legs_chart_service.refresh_snapshot_async(
@@ -1015,40 +1117,48 @@ def macro_fair_value_legs_chart():
                     )
                     snapshot["snapshot_refresh_pending"] = True
                     snapshot["snapshot_refresh_reason"] = "session"
-                    return jsonify({
-                        "success": True,
-                        "data": snapshot,
-                    }), 200
+                    return jsonify(
+                        {
+                            "success": True,
+                            "data": snapshot,
+                        }
+                    ), 200
                 if snapshot_covers_latest_timestamp:
-                    return jsonify({
-                        "success": True,
-                        "data": snapshot,
-                    }), 200
+                    return jsonify(
+                        {
+                            "success": True,
+                            "data": snapshot,
+                        }
+                    ), 200
                 fair_value_legs_chart_service.refresh_snapshot_async(
                     **build_kwargs,
                     min_timestamp_ms=min_history_timestamp,
                 )
                 snapshot["snapshot_refresh_pending"] = True
                 snapshot["snapshot_refresh_reason"] = "timestamp"
-                return jsonify({
-                    "success": True,
-                    "data": snapshot,
-                }), 200
+                return jsonify(
+                    {
+                        "success": True,
+                        "data": snapshot,
+                    }
+                ), 200
 
         result = fair_value_legs_chart_service.build_payload(
             **build_kwargs,
             min_timestamp_ms=min_history_timestamp,
         )
-        return jsonify({
-            "success": bool(result.get("ok")),
-            "data": result,
-        }), 200 if result.get("ok") else 404
+        return jsonify(
+            {
+                "success": bool(result.get("ok")),
+                "data": result,
+            }
+        ), 200 if result.get("ok") else 404
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/fair-value/legs-chart/latest', methods=['POST'])
-def macro_fair_value_legs_chart_latest():
+@macro_bp.route("/fair-value/legs-chart/latest", methods=["POST"])
+def macro_fair_value_legs_chart_latest() -> ResponseReturnValue:
     try:
         payload = request.get_json(silent=True) or {}
         result = fair_value_legs_chart_service.build_latest_payload(
@@ -1058,18 +1168,22 @@ def macro_fair_value_legs_chart_latest():
             session_start=str(payload.get("session_start") or "09:00"),
             session_end=str(payload.get("session_end") or "18:30"),
             rolling_window_points=int(payload.get("rolling_window_points") or 60),
-            vol_context=payload.get("vol_context") if isinstance(payload.get("vol_context"), dict) else None,
+            vol_context=payload.get("vol_context")
+            if isinstance(payload.get("vol_context"), dict)
+            else None,
         )
-        return jsonify({
-            "success": bool(result.get("ok")),
-            "data": result,
-        }), 200 if result.get("ok") else 404
+        return jsonify(
+            {
+                "success": bool(result.get("ok")),
+                "data": result,
+            }
+        ), 200 if result.get("ok") else 404
     except Exception as e:
         return error_response(logger, status_code=500, exception=e)
 
 
-@macro_bp.route('/screen-capture/compact-csv', methods=['POST'])
-def compact_screen_capture_csv():
+@macro_bp.route("/screen-capture/compact-csv", methods=["POST"])
+def compact_screen_capture_csv() -> ResponseReturnValue:
     """
     Reescreve os CSVs de market screen capture mantendo apenas linhas com
     symbol_normalized e price válidos.  Roda dentro do processo Python para
@@ -1090,30 +1204,44 @@ def compact_screen_capture_csv():
 
         days = min(int(request.args.get("days", 7)), 60)
 
-        csv_files = sorted([
-            f for f in _os.listdir(rows_dir)
-            if f.endswith(".csv") and not f.endswith(".tmp") and not f.endswith(".compacting")
-        ])[-days:]
+        csv_files = sorted(
+            [
+                f
+                for f in _os.listdir(rows_dir)
+                if f.endswith(".csv") and not f.endswith(".tmp") and not f.endswith(".compacting")
+            ]
+        )[-days:]
 
         results = []
         for fname in csv_files:
             path = _os.path.join(rows_dir, fname)
-            tmp  = path + ".compacting"
+            tmp = path + ".compacting"
             try:
                 original_bytes = _os.path.getsize(path)
                 kept = dropped = 0
 
-                with open(path, newline="", encoding="utf-8", errors="replace") as fin, \
-                     open(tmp,  "w", newline="", encoding="utf-8", errors="replace") as fout:
+                with (
+                    open(path, newline="", encoding="utf-8", errors="replace") as fin,
+                    open(tmp, "w", newline="", encoding="utf-8", errors="replace") as fout,
+                ):
                     reader = _csv.DictReader(fin)
                     if not reader.fieldnames:
-                        results.append({"file": fname, "ok": True, "kept": 0, "dropped": 0,
-                                        "note": "arquivo vazio"})
+                        results.append(
+                            {
+                                "file": fname,
+                                "ok": True,
+                                "kept": 0,
+                                "dropped": 0,
+                                "note": "arquivo vazio",
+                            }
+                        )
                         continue
                     writer = _csv.DictWriter(fout, fieldnames=reader.fieldnames)
                     writer.writeheader()
                     for row in reader:
-                        sym_ok   = bool((row.get("symbol") or row.get("symbol_normalized") or "").strip())
+                        sym_ok = bool(
+                            (row.get("symbol") or row.get("symbol_normalized") or "").strip()
+                        )
                         price_ok = bool((row.get("price") or "").strip())
                         if sym_ok and price_ok:
                             writer.writerow(row)
@@ -1123,14 +1251,16 @@ def compact_screen_capture_csv():
 
                 compact_bytes = _os.path.getsize(tmp)
                 _os.replace(tmp, path)
-                results.append({
-                    "file": fname,
-                    "original_mb": round(original_bytes / 1024 / 1024, 2),
-                    "compact_mb":  round(compact_bytes  / 1024 / 1024, 2),
-                    "kept": kept,
-                    "dropped": dropped,
-                    "ok": True,
-                })
+                results.append(
+                    {
+                        "file": fname,
+                        "original_mb": round(original_bytes / 1024 / 1024, 2),
+                        "compact_mb": round(compact_bytes / 1024 / 1024, 2),
+                        "kept": kept,
+                        "dropped": dropped,
+                        "ok": True,
+                    }
+                )
             except Exception as exc:
                 if _os.path.exists(tmp):
                     try:

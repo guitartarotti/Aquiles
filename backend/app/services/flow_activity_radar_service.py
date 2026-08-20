@@ -1225,13 +1225,13 @@ class FlowActivityRadarService:
         denominator = sum((x - x_mean) ** 2 for x in x_values)
         if denominator <= 0:
             return 0.0, 0.0
-        numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, series))
+        numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, series, strict=False))
         slope = numerator / denominator
         ss_total = sum((y - y_mean) ** 2 for y in series)
         if ss_total <= 0:
             return slope, 0.0
         intercept = y_mean - (slope * x_mean)
-        residuals = [y - ((slope * x) + intercept) for x, y in zip(x_values, series)]
+        residuals = [y - ((slope * x) + intercept) for x, y in zip(x_values, series, strict=False)]
         ss_res = sum(value * value for value in residuals)
         r2 = 1.0 - (ss_res / ss_total)
         return slope, max(min(r2, 1.0), -1.0)

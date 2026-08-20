@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import math
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, overload
 
 import numpy as np
+import pandas as pd
 
 from ...config import Config
 from ...utils.logger import get_logger
@@ -37,7 +38,15 @@ from .us_rates_factor_model import build_us_rates_factor_context
 logger = get_logger("aquiles.options_fair_value.service")
 
 
-def _finite_float(value: Any, default: float = 0.0) -> float:
+@overload
+def _finite_float(value: Any, default: None) -> float | None: ...
+
+
+@overload
+def _finite_float(value: Any, default: float = 0.0) -> float: ...
+
+
+def _finite_float(value: Any, default: float | None = 0.0) -> float | None:
     try:
         parsed = float(value)
     except Exception:
@@ -72,7 +81,7 @@ def _cumulative_by_session(
 
 def _build_proxy_factor_contributions(
     *,
-    frame,
+    frame: pd.DataFrame,
     all_feature_meta: dict[str, dict[str, Any]] | None,
     structural_model: dict[str, Any],
     run_config: FairValueRunConfig,

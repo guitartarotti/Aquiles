@@ -37,6 +37,7 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "playwright>=1.52.0",
     "pydantic>=2.0.0",
+    "psycopg[binary]>=3.2.0",
     "rapidocr-onnxruntime>=1.4.4",
 ]
 
@@ -61,6 +62,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.12.0",
     "mypy>=1.19.1",
+    "hypothesis>=6.165.10",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -77,12 +79,54 @@ line-length = 100
 extend-exclude = ["uploads", "raw"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I"]
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",
+    "ARG005",
+    "B007",
+    "B023",
+    "B904",
+    "B905",
+    "C901",
+    "SIM103",
+    "SIM110",
+    "SIM114",
+    "SIM118",
+    "UP007",
+    "UP008",
+    "UP010",
+    "UP011",
+    "UP019",
+    "UP021",
+    "UP022",
+    "UP023",
+    "UP024",
+    "UP026",
+    "UP028",
+    "UP029",
+    "UP030",
+    "UP032",
+    "UP033",
+    "UP036",
+    "UP039",
+    "UP040",
+    "UP043",
+    "UP044",
+    "UP046",
+    "UP047",
+]
 ignore = ["E501"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 50
 
 [tool.ruff.lint.per-file-ignores]
 "app/api/__init__.py" = ["E402"]
 "app/api/macro.py" = ["E402"]
+"app/services/atemporal_price_chart_service.py" = ["B023"]
 "app/services/options_fair_value_modeling/factor_preparation.py" = ["E402"]
 "run_*_service.py" = ["E402"]
 
@@ -93,7 +137,50 @@ follow_imports = "silent"
 ignore_missing_imports = true
 warn_unused_configs = true
 files = [
+    "app/domains",
+    "app/infrastructure",
+    "app/workers",
+    "app/container.py",
+    "app/http.py",
+    "app/api/legacy_heatmap_proxy.py",
+    "app/api/macro.py",
+    "app/services/cvm_cda_manager.py",
+    "app/services/funds_flow_local_manager.py",
+    "app/services/macro_context_tokenizer.py",
+    "app/services/macro_cross_asset_service.py",
+    "app/services/macro_curve_discovery_service.py",
+    "app/services/macro_driver_service.py",
+    "app/services/macro_live_service.py",
+    "app/services/macro_market_overview_service.py",
+    "app/services/macro_options_heatmap_context_schedule.py",
+    "app/services/macro_participant_heatmap_manager.py",
+    "app/services/macro_options_heatmap_context_manager.py",
+    "app/services/macro_options_heatmap_context_service.py",
+    "app/services/macro_participant_analytics.py",
+    "app/services/macro_participant_heatmap_service.py",
+    "app/services/macro_participant_math.py",
+    "app/services/macro_participant_registry.py",
+    "app/services/macro_persona_service.py",
+    "app/services/macro_thermometer_service.py",
+    "app/services/macro_trend_service.py",
+    "app/services/options_collector_manager.py",
+    "app/services/flow_replicator_service.py",
+    "app/services/options_modeling",
+    "app/services/options_global_modeling",
+    "app/services/options_fair_value_modeling",
+    "app/services/options_contract_service.py",
+    "app/services/options_data_provider.py",
+    "app/services/options_greeks_model.py",
+    "app/services/options_history_service.py",
+    "app/services/options_query_service.py",
+    "app/services/options_volume_tracker.py",
     "app/services/fair_value_legs_math.py",
     "app/services/fair_value_markov_math.py",
-    "app/services/macro_participant_math.py",
+    "run_collection_scheduler_service.py",
+    "run_market_screen_collector.py",
+    "run_options_collector_service.py",
+    "run_options_volume_tracker_service.py",
+    "run_flow_replicator_service.py",
+    "run_etf_daily_flow_service.py",
+    "../scripts/quality_budget.py",
 ]
