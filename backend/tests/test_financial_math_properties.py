@@ -245,9 +245,9 @@ def test_clamps_never_escape_their_bounds(value: float, lower: float, upper: flo
 
 @given(values=st.lists(finite_numbers, min_size=4, max_size=30))
 def test_perfect_linear_series_have_unit_correlation(values: list[float]) -> None:
-    if max(values) - min(values) <= 1e-9:
-        return
     transformed = [(3.0 * value) + 7.0 for value in values]
+    if np.std(values) <= 1e-9 or np.std(transformed) <= 1e-9:
+        return
 
     assert _pearson_corr(values, transformed) == pytest.approx(1.0, abs=1e-6)
     assert _rolling_corr(values, transformed, len(values)) == pytest.approx(0.995, abs=1e-6)
