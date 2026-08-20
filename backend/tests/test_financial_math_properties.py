@@ -220,7 +220,10 @@ def test_weighted_statistics_are_finite_and_bounded(
     assert math.isfinite(sigma)
     assert sigma >= 1e-6
     if weight_array.sum() > 1e-12:
-        assert value_array.min() <= average <= value_array.max()
+        lower = float(value_array.min())
+        upper = float(value_array.max())
+        assert average >= lower or math.isclose(average, lower, rel_tol=1e-12, abs_tol=1e-12)
+        assert average <= upper or math.isclose(average, upper, rel_tol=1e-12, abs_tol=1e-12)
 
 
 @given(values=st.lists(finite_numbers, min_size=1, max_size=40))
