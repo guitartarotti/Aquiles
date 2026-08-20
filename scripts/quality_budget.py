@@ -7,11 +7,10 @@ import io
 import re
 import sys
 import tokenize
+import tomllib
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
-
-import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUDGET_PATH = REPO_ROOT / "quality-budget.toml"
