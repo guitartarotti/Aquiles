@@ -1,2 +1,2 @@
 --index-url https://blpapi.bloomberg.com/repository/releases/python/simple/
-blpapi==3.26.2.1
+blpapi==3.26.7.1
