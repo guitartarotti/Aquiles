@@ -36,26 +36,16 @@ export function createMacroHeatmapControls(context) {
     const options = new Map();
     for (const asset of normalizedAssets.value) {
       const observedRows = [
-        ...(Array.isArray(asset?.participant_catalog)
-          ? asset.participant_catalog
-          : []),
-        ...(Array.isArray(asset?.latest_participants)
-          ? asset.latest_participants
-          : []),
+        ...(Array.isArray(asset?.participant_catalog) ? asset.participant_catalog : []),
+        ...(Array.isArray(asset?.latest_participants) ? asset.latest_participants : []),
         ...(Array.isArray(asset?.heat_points) ? asset.heat_points : []),
       ];
       for (const row of observedRows) {
         if (
           !matchesParticipantScope(
             {
-              isRetail:
-                row?.origin_scope === "retail" ||
-                row?.broker_segment === "retail" ||
-                row?.is_retail_broker,
-              isForeign:
-                row?.origin_scope === "foreign" ||
-                row?.broker_segment === "foreign" ||
-                row?.is_foreign_broker,
+              isRetail: row?.origin_scope === "retail" || row?.broker_segment === "retail" || row?.is_retail_broker,
+              isForeign: row?.origin_scope === "foreign" || row?.broker_segment === "foreign" || row?.is_foreign_broker,
             },
             participantScope.value,
           )
@@ -70,9 +60,7 @@ export function createMacroHeatmapControls(context) {
         });
       }
     }
-    return [...options.values()].sort((left, right) =>
-      left.label.localeCompare(right.label, "pt-BR"),
-    );
+    return [...options.values()].sort((left, right) => left.label.localeCompare(right.label, "pt-BR"));
   });
 
   function getBrokerFilterKey(item) {
@@ -130,10 +118,9 @@ export function createMacroHeatmapControls(context) {
 
   function toggleIndicatorMetricSelection(key) {
     if (!key) return;
-    selectedIndicatorMetricKeys.value =
-      selectedIndicatorMetricKeys.value.includes(key)
-        ? selectedIndicatorMetricKeys.value.filter((item) => item !== key)
-        : [...selectedIndicatorMetricKeys.value, key];
+    selectedIndicatorMetricKeys.value = selectedIndicatorMetricKeys.value.includes(key)
+      ? selectedIndicatorMetricKeys.value.filter((item) => item !== key)
+      : [...selectedIndicatorMetricKeys.value, key];
   }
 
   function clearIndicatorCohortSelection() {
@@ -142,10 +129,9 @@ export function createMacroHeatmapControls(context) {
 
   function toggleIndicatorCohortSelection(key) {
     if (!key) return;
-    selectedIndicatorCohortKeys.value =
-      selectedIndicatorCohortKeys.value.includes(key)
-        ? selectedIndicatorCohortKeys.value.filter((item) => item !== key)
-        : [...selectedIndicatorCohortKeys.value, key];
+    selectedIndicatorCohortKeys.value = selectedIndicatorCohortKeys.value.includes(key)
+      ? selectedIndicatorCohortKeys.value.filter((item) => item !== key)
+      : [...selectedIndicatorCohortKeys.value, key];
   }
 
   function clearAnnotationTypeSelection() {
@@ -154,10 +140,9 @@ export function createMacroHeatmapControls(context) {
 
   function toggleAnnotationTypeSelection(key) {
     if (!key) return;
-    selectedAnnotationTypeKeys.value =
-      selectedAnnotationTypeKeys.value.includes(key)
-        ? selectedAnnotationTypeKeys.value.filter((item) => item !== key)
-        : [...selectedAnnotationTypeKeys.value, key];
+    selectedAnnotationTypeKeys.value = selectedAnnotationTypeKeys.value.includes(key)
+      ? selectedAnnotationTypeKeys.value.filter((item) => item !== key)
+      : [...selectedAnnotationTypeKeys.value, key];
   }
 
   function clearPoolOverlaySelection() {
@@ -189,25 +174,20 @@ export function createMacroHeatmapControls(context) {
   function toggleGammaOverlaySelection(key) {
     if (!key) return;
     gammaOverlayEnabled.value = true;
-    selectedGammaOverlayKeys.value = selectedGammaOverlayKeys.value.includes(
-      key,
-    )
+    selectedGammaOverlayKeys.value = selectedGammaOverlayKeys.value.includes(key)
       ? selectedGammaOverlayKeys.value.filter((item) => item !== key)
       : [...selectedGammaOverlayKeys.value, key];
   }
 
   function clearFairValueFeatureSelection() {
-    selectedFairValueFeatureKeys.value = FAIR_VALUE_FEATURE_OPTIONS.map(
-      (item) => item.key,
-    );
+    selectedFairValueFeatureKeys.value = FAIR_VALUE_FEATURE_OPTIONS.map((item) => item.key);
   }
 
   function toggleFairValueFeatureSelection(key) {
     if (!key) return;
-    selectedFairValueFeatureKeys.value =
-      selectedFairValueFeatureKeys.value.includes(key)
-        ? selectedFairValueFeatureKeys.value.filter((item) => item !== key)
-        : [...selectedFairValueFeatureKeys.value, key];
+    selectedFairValueFeatureKeys.value = selectedFairValueFeatureKeys.value.includes(key)
+      ? selectedFairValueFeatureKeys.value.filter((item) => item !== key)
+      : [...selectedFairValueFeatureKeys.value, key];
   }
 
   function clearFairValueCoreLegSelection() {
@@ -216,10 +196,9 @@ export function createMacroHeatmapControls(context) {
 
   function toggleFairValueCoreLegSelection(key) {
     if (!key) return;
-    selectedFairValueCoreLegKeys.value =
-      selectedFairValueCoreLegKeys.value.includes(key)
-        ? selectedFairValueCoreLegKeys.value.filter((item) => item !== key)
-        : [...selectedFairValueCoreLegKeys.value, key];
+    selectedFairValueCoreLegKeys.value = selectedFairValueCoreLegKeys.value.includes(key)
+      ? selectedFairValueCoreLegKeys.value.filter((item) => item !== key)
+      : [...selectedFairValueCoreLegKeys.value, key];
   }
 
   function clearFairValueShadowLegSelection() {
@@ -228,20 +207,16 @@ export function createMacroHeatmapControls(context) {
 
   function toggleFairValueShadowLegSelection(key) {
     if (!key) return;
-    selectedFairValueShadowLegKeys.value =
-      selectedFairValueShadowLegKeys.value.includes(key)
-        ? selectedFairValueShadowLegKeys.value.filter((item) => item !== key)
-        : [...selectedFairValueShadowLegKeys.value, key];
+    selectedFairValueShadowLegKeys.value = selectedFairValueShadowLegKeys.value.includes(key)
+      ? selectedFairValueShadowLegKeys.value.filter((item) => item !== key)
+      : [...selectedFairValueShadowLegKeys.value, key];
   }
 
   function toggleFairValueRankingWindow(key) {
     if (!key) return;
-    expandedFairValueRankingWindowKeys.value =
-      expandedFairValueRankingWindowKeys.value.includes(key)
-        ? expandedFairValueRankingWindowKeys.value.filter(
-            (item) => item !== key,
-          )
-        : [...expandedFairValueRankingWindowKeys.value, key];
+    expandedFairValueRankingWindowKeys.value = expandedFairValueRankingWindowKeys.value.includes(key)
+      ? expandedFairValueRankingWindowKeys.value.filter((item) => item !== key)
+      : [...expandedFairValueRankingWindowKeys.value, key];
   }
 
   function getRangeKey(assetKey) {
@@ -253,9 +228,7 @@ export function createMacroHeatmapControls(context) {
   }
 
   function getRangeOption(rangeKey) {
-    return (
-      RANGE_OPTIONS.find((item) => item.key === rangeKey) || RANGE_OPTIONS[0]
-    );
+    return RANGE_OPTIONS.find((item) => item.key === rangeKey) || RANGE_OPTIONS[0];
   }
 
   function getHover(assetKey) {
@@ -272,9 +245,7 @@ export function createMacroHeatmapControls(context) {
       .map((candle) => new Date(candle.time).getTime())
       .filter(Number.isFinite)
       .sort((a, b) => a - b);
-    const maxTs = timestamps.length
-      ? timestamps[timestamps.length - 1]
-      : Date.now();
+    const maxTs = timestamps.length ? timestamps[timestamps.length - 1] : Date.now();
     const state = viewportState.value[assetKey];
     if (!state) {
       viewportState.value = {
@@ -291,10 +262,7 @@ export function createMacroHeatmapControls(context) {
     if (!Number.isFinite(nextState.endTs) || nextState.endTs > maxTs) {
       nextState.endTs = maxTs;
     }
-    if (
-      !Number.isFinite(nextState.timeframeMinutes) ||
-      nextState.timeframeMinutes < 1
-    ) {
+    if (!Number.isFinite(nextState.timeframeMinutes) || nextState.timeframeMinutes < 1) {
       nextState.timeframeMinutes = 1;
     }
     viewportState.value = {
@@ -319,16 +287,11 @@ export function createMacroHeatmapControls(context) {
 
   watch(availableBrokerOptions, (options) => {
     const valid = new Set(options.map((option) => option.key));
-    selectedBrokerKeys.value = selectedBrokerKeys.value.filter((key) =>
-      valid.has(key),
-    );
+    selectedBrokerKeys.value = selectedBrokerKeys.value.filter((key) => valid.has(key));
   });
 
   watch(
-    () =>
-      capturedFactorHistoryPanel.value?.availableFactors
-        ?.map((item) => item.factor)
-        .join("|") || "",
+    () => capturedFactorHistoryPanel.value?.availableFactors?.map((item) => item.factor).join("|") || "",
     () => {
       const panel = capturedFactorHistoryPanel.value;
       if (!panel) {
@@ -336,14 +299,8 @@ export function createMacroHeatmapControls(context) {
         return;
       }
       const valid = new Set(panel.availableFactors.map((item) => item.factor));
-      const persisted = selectedCapturedFactorKeys.value.filter((key) =>
-        valid.has(key),
-      );
-      const next = persisted.length
-        ? persisted
-        : capturedFactorSelectionTouched
-          ? []
-          : panel.defaultFactors;
+      const persisted = selectedCapturedFactorKeys.value.filter((key) => valid.has(key));
+      const next = persisted.length ? persisted : capturedFactorSelectionTouched ? [] : panel.defaultFactors;
       if (next.join(",") !== selectedCapturedFactorKeys.value.join(",")) {
         selectedCapturedFactorKeys.value = [...next];
       }
@@ -358,9 +315,7 @@ export function createMacroHeatmapControls(context) {
       .map((candle) => new Date(candle.time).getTime())
       .filter(Number.isFinite)
       .sort((a, b) => a - b);
-    const maxTs = timestamps.length
-      ? timestamps[timestamps.length - 1]
-      : Date.now();
+    const maxTs = timestamps.length ? timestamps[timestamps.length - 1] : Date.now();
     viewportState.value = {
       ...viewportState.value,
       [assetKey]: {
@@ -378,9 +333,7 @@ export function createMacroHeatmapControls(context) {
       .map((candle) => new Date(candle.time).getTime())
       .filter(Number.isFinite)
       .sort((a, b) => a - b);
-    const maxTs = timestamps.length
-      ? timestamps[timestamps.length - 1]
-      : Date.now();
+    const maxTs = timestamps.length ? timestamps[timestamps.length - 1] : Date.now();
     viewportState.value = {
       ...viewportState.value,
       [assetKey]: {
@@ -407,11 +360,7 @@ export function createMacroHeatmapControls(context) {
     const spanMs = range.minutes * 60 * 1000;
     const stepMs = Math.max(60 * 1000, Math.round(spanMs * 0.35));
     const currentEnd = viewportState.value[assetKey]?.endTs || maxTs;
-    const nextEnd = clamp(
-      currentEnd + direction * stepMs,
-      minTs + spanMs,
-      maxTs,
-    );
+    const nextEnd = clamp(currentEnd + direction * stepMs, minTs + spanMs, maxTs);
 
     viewportState.value = {
       ...viewportState.value,
@@ -458,9 +407,7 @@ export function createMacroHeatmapControls(context) {
       ...dragState.value,
       [assetKey]: {
         startClientX: event.clientX,
-        startEndTs:
-          viewportState.value[assetKey]?.endTs ||
-          timestamps[timestamps.length - 1],
+        startEndTs: viewportState.value[assetKey]?.endTs || timestamps[timestamps.length - 1],
         minTs: timestamps[0],
         maxTs: timestamps[timestamps.length - 1],
         spanMs,

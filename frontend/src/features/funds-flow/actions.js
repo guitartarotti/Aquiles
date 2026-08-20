@@ -62,11 +62,7 @@ export function createFundsFlowActions(context) {
     activeTab.value = key;
     if (key === "nport" && !nportLoaded.value) {
       loadNportDashboard(false);
-    } else if (
-      key === "nport" &&
-      nportLoaded.value &&
-      !nportAnalyticsLoaded.value
-    ) {
+    } else if (key === "nport" && nportLoaded.value && !nportAnalyticsLoaded.value) {
       loadNportAnalytics(false);
     } else if (key === "cda" && !cdaLoaded.value) {
       loadCdaDashboard(false);
@@ -77,11 +73,7 @@ export function createFundsFlowActions(context) {
     } else if (key === "graph" && !cdaGraphLoaded.value) {
       loadCdaGraph(false);
     }
-    if (
-      key === "graph" &&
-      moneyFlowMode.value === "quarterly" &&
-      !nportLoaded.value
-    ) {
+    if (key === "graph" && moneyFlowMode.value === "quarterly" && !nportLoaded.value) {
       loadNportDashboard(false);
     } else if (
       key === "graph" &&
@@ -142,39 +134,21 @@ export function createFundsFlowActions(context) {
 
   function metricValue(row) {
     if (!row) return null;
-    if (metric.value === "pct_pl")
-      return Number(row.flow_pct_pl_21d || row.flow_pct_pl || 0) * 100;
+    if (metric.value === "pct_pl") return Number(row.flow_pct_pl_21d || row.flow_pct_pl || 0) * 100;
     if (metric.value === "zscore") return Number(row.zscore || 0);
     return Number(row.rolling_flow_21d || row.net_flow || 0) / 1_000_000_000;
   }
 
   function rankingWindowFlowValue(row, window = "21d") {
     if (!row) return 0;
-    if (window === "1d")
-      return Number(
-        row.net_flow_1d ?? row.captacao_liquida_total ?? row.net_flow ?? 0,
-      );
-    if (window === "5d")
-      return Number(row.net_flow_5d ?? row.rolling_flow_5d ?? 0);
-    return Number(
-      row.net_flow_21d ??
-        row.rolling_flow_21d ??
-        row.captacao_liquida_total ??
-        row.net_flow ??
-        0,
-    );
+    if (window === "1d") return Number(row.net_flow_1d ?? row.captacao_liquida_total ?? row.net_flow ?? 0);
+    if (window === "5d") return Number(row.net_flow_5d ?? row.rolling_flow_5d ?? 0);
+    return Number(row.net_flow_21d ?? row.rolling_flow_21d ?? row.captacao_liquida_total ?? row.net_flow ?? 0);
   }
 
   function classFlowValue(row) {
     if (!row) return 0;
-    return Number(
-      row.net_flow_21d ??
-        row.captacao_liquida_total ??
-        row.net_flow ??
-        row.value ??
-        row.flow ??
-        0,
-    );
+    return Number(row.net_flow_21d ?? row.captacao_liquida_total ?? row.net_flow ?? row.value ?? row.flow ?? 0);
   }
 
   function b3Trend(participantType) {
@@ -198,80 +172,44 @@ export function createFundsFlowActions(context) {
 
   function sourceLastCapture(source) {
     if (sourcePublicationGap(source)) return "sem publ.";
-    if (source.id === "ici_global_flows")
-      return fmtDate(iciLatestDate.value) || iciWorldwide.value?.quarter || "-";
-    if (source.id === "cftc_cot")
-      return fmtDate(cftcPositioning.value?.report_date);
-    if (source.id === "anbima_fundos")
-      return fmtDate(anbimaDaily.value?.reference_date);
+    if (source.id === "ici_global_flows") return fmtDate(iciLatestDate.value) || iciWorldwide.value?.quarter || "-";
+    if (source.id === "cftc_cot") return fmtDate(cftcPositioning.value?.report_date);
+    if (source.id === "anbima_fundos") return fmtDate(anbimaDaily.value?.reference_date);
     if (source.id === "bcb_macro")
-      return fmtDate(
-        bcbLatestBySeries.value?.selic_target?.date ||
-          bcbMacro.value?.summary?.latest_usdbrl_ptax?.date,
-      );
+      return fmtDate(bcbLatestBySeries.value?.selic_target?.date || bcbMacro.value?.summary?.latest_usdbrl_ptax?.date);
     if (source.id === "b3_etfs") return fmtDate(report.value.last_updated_at);
     if (source.id === "b3_market") return fmtDate(b3Investor.value?.data_until);
-    if (source.id === "b3_derivatives_open_interest")
-      return fmtDate(b3OpenInterest.value?.date);
+    if (source.id === "b3_derivatives_open_interest") return fmtDate(b3OpenInterest.value?.date);
     if (source.id === "b3_investor_participation_monthly")
-      return (
-        b3InvestorMonthly.value?.period_label ||
-        fmtDate(b3InvestorMonthly.value?.date)
-      );
+      return b3InvestorMonthly.value?.period_label || fmtDate(b3InvestorMonthly.value?.date);
     if (source.id === "b3_market_data_report")
-      return (
-        b3MarketData.value?.data_until || b3MarketSummary.value?.period || "-"
-      );
-    if (source.id === "cvm_informe_diario")
-      return fmtDate(report.value.as_of_date);
-    if (source.id === "cvm_cadastro_fi")
-      return fmtDate(report.value.last_updated_at);
-    if (source.id === "cvm_cda")
-      return (
-        cdaReport.value?.period_label || fmtDate(cdaReport.value?.as_of_date)
-      );
+      return b3MarketData.value?.data_until || b3MarketSummary.value?.period || "-";
+    if (source.id === "cvm_informe_diario") return fmtDate(report.value.as_of_date);
+    if (source.id === "cvm_cadastro_fi") return fmtDate(report.value.last_updated_at);
+    if (source.id === "cvm_cda") return cdaReport.value?.period_label || fmtDate(cdaReport.value?.as_of_date);
     return source.ok ? fmtDate(report.value.last_updated_at) : "-";
   }
 
   function sourceOfficialDate(source) {
     if (sourcePublicationGap(source)) return "sem publ.";
     if (source.id === "ici_global_flows")
-      return (
-        fmtDate(iciLatestDate.value) || fmtDate(source.latest_data_date) || "-"
-      );
+      return fmtDate(iciLatestDate.value) || fmtDate(source.latest_data_date) || "-";
     if (source.id === "b3_investor_participation_monthly")
-      return (
-        source.reference_label ||
-        b3InvestorMonthly.value?.period_label ||
-        fmtDate(source.latest_data_date)
-      );
-    if (source.id === "cvm_cda")
-      return (
-        cdaReport.value?.period_label || fmtDate(cdaReport.value?.as_of_date)
-      );
-    return (
-      source.reference_label ||
-      fmtDate(source.latest_data_date) ||
-      sourceLastCapture(source)
-    );
+      return source.reference_label || b3InvestorMonthly.value?.period_label || fmtDate(source.latest_data_date);
+    if (source.id === "cvm_cda") return cdaReport.value?.period_label || fmtDate(cdaReport.value?.as_of_date);
+    return source.reference_label || fmtDate(source.latest_data_date) || sourceLastCapture(source);
   }
 
   function sourceReference(source) {
     if (source.id === "ici_global_flows") {
       const refs = [
-        iciMonthlyEtf.value?.reference_month
-          ? `ETF assets ${iciMonthlyEtf.value.reference_month}`
-          : null,
-        iciWorldwide.value?.quarter
-          ? `Worldwide ${iciWorldwide.value.quarter}`
-          : null,
+        iciMonthlyEtf.value?.reference_month ? `ETF assets ${iciMonthlyEtf.value.reference_month}` : null,
+        iciWorldwide.value?.quarter ? `Worldwide ${iciWorldwide.value.quarter}` : null,
       ].filter(Boolean);
       return refs.join(" | ");
     }
     if (source.id === "b3_investor_participation_monthly") {
-      return (
-        b3InvestorMonthly.value?.period_label || source.reference_label || ""
-      );
+      return b3InvestorMonthly.value?.period_label || source.reference_label || "";
     }
     if (source.id === "cvm_cda") {
       return cdaReport.value?.period_label || "";
@@ -281,8 +219,7 @@ export function createFundsFlowActions(context) {
 
   function sourceCapturedAt(source) {
     if (source.last_captured_at) return fmtDateTime(source.last_captured_at);
-    if (source.ok && report.value.last_updated_at)
-      return fmtDateTime(report.value.last_updated_at);
+    if (source.ok && report.value.last_updated_at) return fmtDateTime(report.value.last_updated_at);
     return "-";
   }
 
@@ -290,8 +227,7 @@ export function createFundsFlowActions(context) {
     if (sourcePublicationGap(source)) {
       return `Consulta executada, mas a fonte oficial respondeu sem linhas publicadas para a janela sondada em torno de ${fmtDate(report.value.as_of_date)}. O endpoint existe e retornou schema, porém sem dados utilizáveis nessa tabela.`;
     }
-    if (source.latest_error || source.error)
-      return `Falha recente: ${source.latest_error || source.error}`;
+    if (source.latest_error || source.error) return `Falha recente: ${source.latest_error || source.error}`;
     if (sourceStatusClass(source) === "active") {
       return `Captura operacional com ${fmtCount(source.rows)} linhas agregadas, latencia ${fmtLatency(source.latency_ms)} e cache local versionado.`;
     }
@@ -308,12 +244,10 @@ export function createFundsFlowActions(context) {
       return "COT/PRE semanal: posicoes de terca-feira, publicacao publica usual na sexta; TFF, Disaggregated, Legacy e CIT via API.";
     if (source.id === "bcb_macro")
       return "SGS diario/mensal por serie e PTAX OData com boletins intradiarios agregados por data.";
-    if (source.id === "b3_etfs")
-      return "Consulta B3 Fundos Listados por segmento ETF; rechecagem diaria no pipeline.";
+    if (source.id === "b3_etfs") return "Consulta B3 Fundos Listados por segmento ETF; rechecagem diaria no pipeline.";
     if (source.id?.startsWith("b3_") || source.id === "b3_market")
       return "BDI/CSV B3 diario, com algumas tabelas mensais acumuladas.";
-    if (source.id === "anbima_fundos")
-      return "Consolidado diario e boletim/rankings mensais via ANBIMA Data.";
+    if (source.id === "anbima_fundos") return "Consolidado diario e boletim/rankings mensais via ANBIMA Data.";
     if (source.id === "cvm_cda")
       return "CVM CDA e mensal; meses recentes sao rechecados diariamente por possiveis reapresentacoes/confidencialidade, meses antigos semanalmente.";
     if (source.id?.startsWith("cvm_"))
@@ -332,8 +266,7 @@ export function createFundsFlowActions(context) {
     ];
     if (sourcePublicationGap(source)) parts.push("sem_publicacao=true");
     if (source.latest_error) parts.push(`erro=${source.latest_error}`);
-    if (source.secondaryReference)
-      parts.push(`referencia=${source.secondaryReference}`);
+    if (source.secondaryReference) parts.push(`referencia=${source.secondaryReference}`);
     return parts.join(" | ");
   }
 
@@ -346,12 +279,7 @@ export function createFundsFlowActions(context) {
         "raw_cvm_informe_diario",
         "analytics flow daily",
       ],
-      cvm_cadastro_fi: [
-        "Cadastro legado",
-        "Registro RCVM175",
-        "normalizacao CNPJ",
-        "classificacao fallback",
-      ],
+      cvm_cadastro_fi: ["Cadastro legado", "Registro RCVM175", "normalizacao CNPJ", "classificacao fallback"],
       cvm_cda: [
         "CKAN package_show",
         "ZIP mensal CDA",
@@ -374,20 +302,8 @@ export function createFundsFlowActions(context) {
         "Monthly ETF assets",
         "Worldwide quarterly pais/regiao",
       ],
-      b3_etfs: [
-        "Fundos Listados B3",
-        "ETF RV",
-        "ETF RF",
-        "ETF FII",
-        "ETF cripto",
-        "ETF internacional RF",
-      ],
-      b3_market: [
-        "BDI PDF",
-        "participacao investidores",
-        "historico 21d",
-        "saldo por participante",
-      ],
+      b3_etfs: ["Fundos Listados B3", "ETF RV", "ETF RF", "ETF FII", "ETF cripto", "ETF internacional RF"],
+      b3_market: ["BDI PDF", "participacao investidores", "historico 21d", "saldo por participante"],
       b3_derivatives_open_interest: [
         "BDI table export",
         "DI/DDI/DOL/WDO/WIN",
@@ -395,28 +311,9 @@ export function createFundsFlowActions(context) {
         "variacao d/d",
         "rolling 21d",
       ],
-      b3_investor_participation_monthly: [
-        "BDI table export",
-        "vista",
-        "termo",
-        "opcoes",
-        "exercicios",
-        "blocos",
-      ],
-      b3_market_data_report: [
-        "CSV dados de mercado",
-        "volume",
-        "ADV",
-        "negocios",
-        "estrangeiro",
-      ],
-      bcb_macro: [
-        "SGS USD/BRL",
-        "SGS Selic diaria",
-        "SGS Selic meta",
-        "SGS IPCA",
-        "OData PTAX",
-      ],
+      b3_investor_participation_monthly: ["BDI table export", "vista", "termo", "opcoes", "exercicios", "blocos"],
+      b3_market_data_report: ["CSV dados de mercado", "volume", "ADV", "negocios", "estrangeiro"],
+      bcb_macro: ["SGS USD/BRL", "SGS Selic diaria", "SGS Selic meta", "SGS IPCA", "OData PTAX"],
       fred_macro: ["FRED API", "Treasury yields", "breakeven", "commodities"],
       cftc_cot: [
         "CFTC PRE/API",
@@ -465,11 +362,7 @@ export function createFundsFlowActions(context) {
   }
 
   function friendlyError(err) {
-    return (
-      err?.response?.data?.error ||
-      err?.message ||
-      "Falha ao carregar Funds Flow Local."
-    );
+    return err?.response?.data?.error || err?.message || "Falha ao carregar Funds Flow Local.";
   }
 
   function handleKeydown(event) {
