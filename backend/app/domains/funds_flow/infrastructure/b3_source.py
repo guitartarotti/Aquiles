@@ -930,7 +930,7 @@ class B3FundsFlowAdapter(CachedHttpSource):
             timeout=max(self.timeout_seconds, 60),
         )
         response.raise_for_status()
-        text = response.content.decode("utf-8", "replace")
+        text = bytes(response.content).decode("utf-8", "replace")
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         with open(cache_path, "w", encoding="utf-8") as handle:
             handle.write(text)
