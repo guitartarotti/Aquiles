@@ -9,6 +9,71 @@ permissions:
   contents: read
 
 jobs:
+  integration:
+    name: Real infrastructure integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aquiles
+          POSTGRES_PASSWORD: aquiles-integration
+          POSTGRES_DB: aquiles_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aquiles -d aquiles_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+      neo4j:
+        image: neo4j:5-community
+        env:
+          NEO4J_AUTH: neo4j/aquiles-integration
+        ports:
+          - 7474:7474
+          - 7687:7687
+        options: >-
+          --health-cmd "wget -qO- http://localhost:7474 >/dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 18
+    env:
+      AQUILES_RUN_INTEGRATION_TESTS: "1"
+      DATABASE_URL: postgresql://aquiles:aquiles-integration@localhost:5432/aquiles_test
+      REDIS_URL: redis://localhost:6379/0
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: aquiles-integration
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        working-directory: backend
+        run: uv sync --frozen --group dev
+
+      - name: Exercise real infrastructure adapters
+        working-directory: backend
+        run: uv run pytest tests/integration -m integration --strict-markers
+
   quality:
     runs-on: ubuntu-latest
     steps:
@@ -57,7 +122,7 @@ jobs:
           --cov=app
           --cov-branch
           --cov-report=term-missing
-          --cov-fail-under=31
+          --cov-fail-under=40
 
       - name: Enforce authentication coverage
         working-directory: backend

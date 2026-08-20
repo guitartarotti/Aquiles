@@ -10,8 +10,8 @@ import pandas as pd
 
 from ...config import Config
 from ...utils.logger import get_logger
-from ..macro_options_heatmap_context_service import MacroOptionsHeatmapContextService
 from ..options_store import OptionsStore
+from .context_port import IntradayContextReader
 from .factor_preparation import _model_input_direction_multiplier, load_factor_definitions
 
 logger = get_logger("aquiles.options_fair_value.intraday_dependency")
@@ -75,11 +75,11 @@ class IntradayDependencyService:
     def __init__(
         self,
         *,
+        context_service: IntradayContextReader,
         store: OptionsStore | None = None,
-        context_service: MacroOptionsHeatmapContextService | None = None,
     ) -> None:
         self.store = store or OptionsStore()
-        self.context_service = context_service or MacroOptionsHeatmapContextService()
+        self.context_service = context_service
 
     @staticmethod
     def _factor_meta() -> dict[str, dict[str, Any]]:

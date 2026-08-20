@@ -246,7 +246,7 @@ const SPREAD_SERIES = [
   { key: 'skew_25d', label: 'Skew25', color: COLOR.skew25, enabled: true },
   { key: 'skew_15d', label: 'Skew15', color: COLOR.skew10, enabled: true },
   { key: 'vrp_raw', label: 'VRP', color: COLOR.vrp, enabled: true },
-  { key: 'vrp_rolling_20d', label: 'VRP20', color: COLOR.vrp20, enabled: false, dash: [5, 3] },
+  { key: 'vrp_rolling_20d', label: 'VRP20', color: COLOR.vrp20, enabled: false, dash: [5, 3] }, // gitleaks:allow - metric identifier
 ]
 
 const underlying = ref('IBOVE Index')

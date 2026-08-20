@@ -1,5 +1,6 @@
 [file_size]
 legacy_reason = "Existing oversized modules must not grow and remain scheduled for decomposition."
+absolute_max_lines = 3000
 
 [[file_size.rules]]
 root = "backend/app"
@@ -18,9 +19,9 @@ exclude_parts = ["vendor"]
 "backend/app/api/report.py" = 934
 "backend/app/config.py" = 1317
 "backend/app/domains/funds_flow/infrastructure/b3_source.py" = 1613
-"backend/app/services/cvm_cda_graph_service.py" = 3748
-"backend/app/services/cvm_cda_service.py" = 3075
-"backend/app/services/etf_daily_flow_service.py" = 3237
+"backend/app/services/cvm_cda_graph_service.py" = 1170
+"backend/app/services/cvm_cda_service.py" = 2622
+"backend/app/services/etf_daily_flow_service.py" = 1401
 "backend/app/services/fair_value_legs_chart_service.py" = 1521
 "backend/app/services/fair_value_legs_model.py" = 2041
 "backend/app/services/fair_value_markov_model.py" = 2673
@@ -32,9 +33,8 @@ exclude_parts = ["vendor"]
 "backend/app/services/macro_cross_asset_service.py" = 1785
 "backend/app/services/macro_curve_discovery_service.py" = 1308
 "backend/app/services/macro_driver_service.py" = 2519
-"backend/app/services/macro_live_service.py" = 3262
+"backend/app/services/macro_live_service.py" = 1712
 "backend/app/services/macro_options_heatmap_context_service.py" = 2959
-"backend/app/services/macro_participant_analytics.py" = 3673
 "backend/app/services/macro_participant_heatmap_service.py" = 1002
 "backend/app/services/macro_persona_service.py" = 824
 "backend/app/services/macro_thermometer_service.py" = 1010
@@ -68,7 +68,7 @@ exclude_parts = ["vendor"]
 "frontend/src/components/Step5Interaction.vue" = 2577
 "frontend/src/components/discovery/widgets/AtemporalPriceChartWidget.vue" = 1357
 "frontend/src/components/discovery/widgets/CurveDiscoveryWidget.vue" = 1116
-"frontend/src/components/discovery/widgets/DealerPainMapWidget.vue" = 3562
+"frontend/src/components/discovery/widgets/DealerPainMapWidget.vue" = 2713
 "frontend/src/components/discovery/widgets/DexNeutralWidget.vue" = 1287
 "frontend/src/components/discovery/widgets/FairValueLegsWidget.vue" = 1156
 "frontend/src/components/discovery/widgets/FairValueMarkovRegimeWidget.vue" = 2285
@@ -83,7 +83,7 @@ exclude_parts = ["vendor"]
 "frontend/src/components/discovery/widgets/PcrWidget.vue" = 940
 "frontend/src/components/discovery/widgets/PinningExpansionBattleWidget.vue" = 1757
 "frontend/src/components/discovery/widgets/ReportSourceDiscoveryWidget.vue" = 755
-"frontend/src/components/discovery/widgets/VolatilityIgnitionDetectorWidget.vue" = 3332
+"frontend/src/components/discovery/widgets/VolatilityIgnitionDetectorWidget.vue" = 2729
 "frontend/src/components/discovery/widgets/VolIndexWidget.vue" = 1006
 "frontend/src/components/discovery/widgets/VolOfVolWidget.vue" = 1515
 "frontend/src/components/discovery/widgets/VolSurface3DWidget.vue" = 628
@@ -91,9 +91,9 @@ exclude_parts = ["vendor"]
 "frontend/src/components/reportToolDisplays.js" = 2081
 "frontend/src/composables/useMacroTrendBoard.js" = 1367
 "frontend/src/features/funds-flow/components/EtfDailyFlowPanel.vue" = 766
-"frontend/src/features/funds-flow/components/FundsFlowLocalWidget.vue" = 6644
+"frontend/src/features/funds-flow/components/FundsFlowLocalWidget.vue" = 2906
 "frontend/src/features/funds-flow/models/cdaGraphOverlay.js" = 822
-"frontend/src/features/macro-heatmap/components/MacroHeatmapView.vue" = 6690
+"frontend/src/features/macro-heatmap/components/MacroHeatmapView.vue" = 2678
 "frontend/src/features/macro-heatmap/models/heatmapModels.js" = 2550
 "frontend/src/views/ChartView.vue" = 1307
 "frontend/src/views/DiscoveryView.vue" = 1971
@@ -118,13 +118,10 @@ paths = [
 
 [dependencies]
 ignored_backend_prefixes = ["app.api"]
-backend_cycle_signatures = [
-    "app.services.macro_driver_service|app.services.macro_live_service",
-    "app.services.macro_options_heatmap_context_service|app.services.options_fair_value_modeling.intraday_correlation_history_service|app.services.options_fair_value_modeling.intraday_dependency_service|app.services.options_fair_value_modeling.intraday_neural_model_service",
-]
+backend_cycle_signatures = []
 
 [coverage.ci_steps]
-"Test backend" = 31
+"Test backend" = 40
 "Enforce authentication coverage" = 90
 "Enforce Funds Flow critical coverage" = 60
 "Enforce pure financial calculations coverage" = 80

@@ -13,7 +13,7 @@ from ..config import Config
 from ..utils.atomic_io import atomic_json_dump
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
-from .macro_driver_service import PERSISTED_CROSS_ASSET_VERSION, MacroDriverService
+from .macro_driver_factory import PERSISTED_CROSS_ASSET_VERSION, build_macro_driver_service
 from .macro_live_service import MacroStateStore
 from .macro_market_overview_service import MacroMarketOverviewService
 from .macro_persona_service import MACRO_PERSONA_CATALOG
@@ -105,7 +105,7 @@ class MacroThermometerService:
         self.store = store or MacroStateStore()
         self._llm_client = llm_client
         self.overview_service = MacroMarketOverviewService(store=self.store, llm_client=llm_client)
-        self.driver_service = MacroDriverService(store=self.store, llm_client=llm_client)
+        self.driver_service = build_macro_driver_service(store=self.store, llm_client=llm_client)
         self.cache_path = os.path.join(self.store.root_dir, "thermometer_state.json")
 
     @property

@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import tomllib
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from flask import Flask
@@ -295,7 +296,7 @@ def test_strict_typing_gate_covers_domains_composition_and_collectors() -> None:
     typed_paths = set(mypy_config["files"])
 
     assert mypy_config["strict"] is True
-    assert {
+    required_paths = {
         "app/domains",
         "app/infrastructure",
         "app/workers",
@@ -303,7 +304,11 @@ def test_strict_typing_gate_covers_domains_composition_and_collectors() -> None:
         "app/services/cvm_cda_manager.py",
         "app/services/funds_flow_local_manager.py",
         "app/services/macro_participant_heatmap_manager.py",
-    } <= typed_paths
+    }
+    assert all(
+        any(fnmatchcase(required_path, configured_path) for configured_path in typed_paths)
+        for required_path in required_paths
+    )
 
 
 def test_modular_route_packages_have_no_compatibility_facades() -> None:

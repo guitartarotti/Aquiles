@@ -13,8 +13,8 @@ import pandas as pd
 
 from ...config import Config
 from ...utils.logger import get_logger
-from ..macro_options_heatmap_context_service import MacroOptionsHeatmapContextService
 from ..options_store import OptionsStore
+from .context_port import IntradayContextReader
 from .intraday_dependency_service import IntradayDependencyService
 from .intraday_neural_model_service import IntradayNeuralModelService
 
@@ -100,13 +100,13 @@ class IntradayCorrelationHistoryService:
     def __init__(
         self,
         *,
+        context_service: IntradayContextReader,
         store: OptionsStore | None = None,
-        context_service: MacroOptionsHeatmapContextService | None = None,
         dependency_service: IntradayDependencyService | None = None,
         neural_service: IntradayNeuralModelService | None = None,
     ) -> None:
         self.store = store or OptionsStore()
-        self.context_service = context_service or MacroOptionsHeatmapContextService()
+        self.context_service = context_service
         self.dependency_service = dependency_service or IntradayDependencyService(
             store=self.store,
             context_service=self.context_service,
@@ -1057,19 +1057,17 @@ class IntradayCorrelationHistoryService:
 
 
 class IntradayCorrelationTrainingManager:
-    _instance: "IntradayCorrelationTrainingManager | None" = None
-    _instance_lock = threading.Lock()
     _default_underlyings = ("IBOVE Index",)
     _default_lookbacks = (1, 2, 3)
 
     def __init__(
         self,
         *,
-        service: IntradayCorrelationHistoryService | None = None,
+        service: IntradayCorrelationHistoryService,
         poll_seconds: int = 600,
         cutoff_hour_local: int = 18,
     ) -> None:
-        self.service = service or IntradayCorrelationHistoryService()
+        self.service = service
         self.store = self.service.store
         self.poll_seconds = max(int(poll_seconds), 120)
         self.cutoff_hour_local = max(0, min(int(cutoff_hour_local), 23))
@@ -1079,13 +1077,6 @@ class IntradayCorrelationTrainingManager:
         self._last_completed_at: str | None = None
         self._last_error: str | None = None
         self._last_session_date: str | None = None
-
-    @classmethod
-    def get_instance(cls) -> "IntradayCorrelationTrainingManager":
-        with cls._instance_lock:
-            if cls._instance is None:
-                cls._instance = cls()
-            return cls._instance
 
     @staticmethod
     def _default_modes() -> list[str]:
@@ -1208,8 +1199,8 @@ class IntradayCorrelationTrainingManager:
 
 def refresh_live_pure_intraday_correlation_payloads(
     *,
+    context_service: IntradayContextReader,
     store: OptionsStore | None = None,
-    context_service: MacroOptionsHeatmapContextService | None = None,
     underlying_security: str = "IBOVE Index",
     lookback_days: int = 1,
     horizons: list[int] | None = None,

@@ -166,10 +166,12 @@ contagem bruta de arquivos ou linhas.
 
 - parte dos serviços quantitativos anteriores à arquitetura por domínio ainda está em
   `backend/app/services` e é migrada verticalmente;
-- alguns widgets complexos ainda possuem allowances explícitos de tamanho;
+- nenhum arquivo permanece acima de 3.000 linhas; fachadas complexas ainda possuem
+  allowances explícitos e são reduzidas por um orçamento incremental;
 - integrações Desktop dependem de Windows e licenças locais;
-- o piso de cobertura global é 31%, com meta incremental de 40%, enquanto autenticação,
-  Funds Flow e matemática financeira já possuem gates próprios mais altos;
+- o piso de cobertura global por ramificações é 40% (40,75% medidos em 239 testes), com
+  próxima meta incremental de 45%, enquanto autenticação, Funds Flow e matemática
+  financeira já possuem gates próprios mais altos;
 - Redis e execução distribuída são evoluções previstas quando houver múltiplos hosts.
 
 Esses limites são visíveis por projeto: entram no orçamento, na documentação e na
