@@ -31,7 +31,7 @@
     "services:stop": "pm2 stop ecosystem.config.js"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
+    "concurrently": "^10.0.5",
     "pm2": "^7.0.3"
   },
   "engines": {
